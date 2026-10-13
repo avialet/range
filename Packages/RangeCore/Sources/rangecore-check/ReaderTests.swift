@@ -1,3 +1,4 @@
+#if DEBUG
 import Darwin
 import Foundation
 import RangeCore
@@ -133,3 +134,4 @@ final class CountingProbe: FileProbe, @unchecked Sendable {
     func isEmptyDirectory(_ path: String) -> Bool { disk.isEmptyDirectory(path) }
     func archiveMatches(_ archive: String, folder: String) -> Bool? { disk.archiveMatches(archive, folder: folder) }
 }
+#endif

@@ -1,3 +1,4 @@
+#if DEBUG
 import Foundation
 import RangeCore
 
@@ -143,3 +144,4 @@ let filesTests: (String, [Test]) = ("Files", [
         expectEqual(MountedImages.parse(Data("pas un plist".utf8)), [])
     },
 ])
+#endif

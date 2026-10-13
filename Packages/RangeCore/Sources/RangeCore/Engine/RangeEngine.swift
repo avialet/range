@@ -29,8 +29,10 @@ public actor RangeEngine {
     let probe: any FileProbe = CachingProbe()
     private var tracker = StabilityTracker()
     private let cancelFlag = Flag()
-    /// Dates d'arrivee imposees par nom (essais sur un clone, captures) : un clone arrive « maintenant ».
+    #if DEBUG
+    /// Dates d'arrivee imposees par nom (essais sur un clone, captures) : un clone arrive "maintenant".
     private var addedOverrides: [String: Date] = [:]
+    #endif
 
     public init(journal: Journal, trasher: any Trasher, settings: EngineSettings,
                 mounted: @escaping @Sendable () -> Set<String>? = { MountedImages.current() }) {
@@ -47,9 +49,11 @@ public actor RangeEngine {
         plan = .empty
     }
 
+    #if DEBUG
     public func setAddedOverrides(_ overrides: [String: Date]) {
         addedOverrides = overrides
     }
+    #endif
 
     public func setRules(_ rules: [Rule]) throws {
         self.rules = rules
@@ -66,9 +70,11 @@ public actor RangeEngine {
             plan = .empty
             throw error
         }
+        #if DEBUG
         if !addedOverrides.isEmpty {
             for i in facts.indices { if let date = addedOverrides[facts[i].name] { facts[i].added = date } }
         }
+        #endif
         tracker.observe(facts, now: now)
         try? journal.pruneHeld(present: Set(facts.map(\.inode)))
         let stable = Set(facts.filter { tracker.isStable($0, now: now) }.map(\.path))

@@ -1,3 +1,4 @@
+#if DEBUG
 import Foundation
 import RangeCore
 
@@ -40,3 +41,4 @@ func makeFile(_ dir: URL, _ name: String, _ text: String = "contenu") throws -> 
     try Data(text.utf8).write(to: url)
     return url
 }
+#endif

@@ -1,3 +1,4 @@
+#if DEBUG
 import Foundation
 import RangeCore
 
@@ -64,3 +65,4 @@ let ruleTests: (String, [Test]) = ("Rules", [
         expectEqual(Destination.display("~/Pictures/Captures", subfolder: .month), "Images \u{203A} Captures, par mois")
     },
 ])
+#endif

@@ -1,3 +1,4 @@
+#if DEBUG
 import RangeCore
 
 run([
@@ -11,3 +12,6 @@ run([
     engineTests,
     recoveryTests,
 ])
+#else
+print("tests : configuration debug seulement")
+#endif

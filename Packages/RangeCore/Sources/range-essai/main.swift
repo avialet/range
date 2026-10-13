@@ -1,3 +1,4 @@
+#if DEBUG
 import Foundation
 import RangeCore
 
@@ -86,3 +87,6 @@ Task.detached {
     done.signal()
 }
 done.wait()
+#else
+print("range-essai : configuration debug seulement")
+#endif

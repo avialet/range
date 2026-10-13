@@ -7,7 +7,7 @@ public protocol Trasher: Sendable {
     var searchFolders: [String] { get }
 }
 
-/// La vraie corbeille du Finder (`FileManager.trashItem`), restaurable par « Remettre » aussi.
+/// La vraie corbeille du Finder (`FileManager.trashItem`), restaurable par "Remettre" aussi.
 public struct SystemTrasher: Trasher {
     public init() {}
 
@@ -23,6 +23,7 @@ public struct SystemTrasher: Trasher {
     }
 }
 
+#if DEBUG
 /// Corbeille de substitution (tests, essais sur un dossier jetable : `RANGE_TRASH_PATH`).
 public struct FolderTrasher: Trasher {
     public let folder: String
@@ -46,3 +47,4 @@ public struct FolderTrasher: Trasher {
         return target
     }
 }
+#endif

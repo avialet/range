@@ -1,3 +1,4 @@
+#if DEBUG
 import Darwin
 import Foundation
 import GRDB
@@ -87,3 +88,4 @@ let recoveryTests: (String, [Test]) = ("Recovery", [
         }
     },
 ])
+#endif

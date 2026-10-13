@@ -1,3 +1,4 @@
+#if DEBUG
 import Foundation
 import RangeCore
 
@@ -123,3 +124,4 @@ let engineTests: (String, [Test]) = ("Engine", [
         }
     },
 ])
+#endif

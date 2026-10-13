@@ -1,3 +1,4 @@
+#if DEBUG
 import Darwin
 import Foundation
 import RangeCore
@@ -146,3 +147,4 @@ final class Counter: @unchecked Sendable {
     private let lock = NSLock()
     func next() -> Int { lock.lock(); defer { lock.unlock() }; let v = value; value += 1; return v }
 }
+#endif

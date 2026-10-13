@@ -26,14 +26,16 @@ public final class AppDatabase: Sendable {
     }
 
     /// Emplacement standard : ~/Library/Application Support/Range/range.sqlite,
-    /// ou la variable d'environnement RANGE_DB_PATH / l'argument `-RangeDBPath chemin`
+    /// ou, en DEBUG seulement, la variable RANGE_DB_PATH / l'argument `-RangeDBPath chemin`
     /// (demo, tests manuels).
     public static var defaultURL: URL {
+        #if DEBUG
         let custom = ProcessInfo.processInfo.environment["RANGE_DB_PATH"]
             ?? UserDefaults.standard.string(forKey: "RangeDBPath")
         if let custom, !custom.isEmpty {
             return URL(fileURLWithPath: (custom as NSString).expandingTildeInPath)
         }
+        #endif
         let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
         return support.appendingPathComponent("Range", isDirectory: true).appendingPathComponent("range.sqlite")
     }

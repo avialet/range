@@ -1,3 +1,4 @@
+#if DEBUG
 import Darwin
 import Foundation
 import GRDB
@@ -196,3 +197,4 @@ let undoTests: (String, [Test]) = ("Undo", [
         }
     },
 ])
+#endif

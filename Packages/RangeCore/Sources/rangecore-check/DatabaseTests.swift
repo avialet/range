@@ -1,3 +1,4 @@
+#if DEBUG
 import Foundation
 import RangeCore
 
@@ -14,3 +15,4 @@ let databaseTests: (String, [Test]) = ("Database", [
         expect(try db.read { try Meta.value("absent", in: $0) } == nil)
     },
 ])
+#endif

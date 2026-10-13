@@ -1,3 +1,4 @@
+#if DEBUG
 import Foundation
 import RangeCore
 
@@ -169,3 +170,4 @@ let plannerTests: (String, [Test]) = ("Planner", [
         expectEqual(p.actions.map(\.facts.name), ["Old.dmg", "vacances.jpg", "App.dmg"])
     },
 ])
+#endif
