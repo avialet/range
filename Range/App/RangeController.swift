@@ -220,7 +220,7 @@ final class RangeController {
                 scheduleNextPass(plan.nextWake)
                 if canRunAutomatically, !plan.ready.filter({ !excluded.contains($0.id) }).isEmpty {
                     isScanning = false
-                    await apply(trigger: .automatic)
+                    await apply(Set(plan.ready.filter { !excluded.contains($0.id) }.map(\.id)), trigger: .automatic)
                 }
             } catch let error as FolderAccessError {
                 watcher?.stop()
@@ -256,17 +256,26 @@ final class RangeController {
     /// Lignes cochees pretes.
     var selectedReady: [PlannedAction] { plan.ready.filter { !excluded.contains($0.id) } }
 
-    /// « Ranger N fichiers » de l'apercu.
+    /// "Ranger N fichiers" de l'apercu : exactement les lignes affichees et cochees (par inclusion).
     func applySelection() {
-        Task { await apply(trigger: initialDone ? .manual : .initial) }
+        let ids = Set(selectedReady.map(\.id))
+        Task { await apply(ids, trigger: initialDone ? .manual : .initial) }
     }
 
-    private func apply(trigger: BatchTrigger) async {
-        guard !isApplying else { return }
+    private func apply(_ ids: Set<String>, trigger: BatchTrigger) async {
+        guard !isApplying, !ids.isEmpty else { return }
         isApplying = true
-        let result = await engine.apply(excluding: excluded, trigger: trigger, now: Date())
+        let result: ApplyResult
+        do {
+            result = try await engine.apply(only: ids, trigger: trigger, now: Date().addingTimeInterval(clockOffset))
+        } catch {
+            isApplying = false
+            showToast(Toast(text: "Lecture du dossier impossible : rien n\u{2019}a \u{00E9}t\u{00E9} rang\u{00E9}.", undoBatch: nil))
+            scan()
+            return
+        }
         isApplying = false
-        if trigger == .initial || trigger == .manual { initialDone = true }
+        if trigger != .automatic, !result.moves.isEmpty { initialDone = true }
         if result.failures.contains(where: { $0.reason == .denied }) {
             blocker = .documentsDenied
         } else if blocker == .documentsDenied, !result.moves.isEmpty {
@@ -482,8 +491,8 @@ final class RangeController {
 
     /// Lot du journal date dans le passe (captures).
     func applyForCapture(only names: Set<String>, trigger: BatchTrigger, date: Date) async {
-        let others = Set(plan.ready.filter { !names.contains($0.facts.name) }.map(\.id))
-        _ = await engine.apply(excluding: others, trigger: trigger, now: date)
+        let ids = Set(plan.ready.filter { names.contains($0.facts.name) }.map(\.id))
+        _ = try? await engine.apply(only: ids, trigger: trigger, now: Date().addingTimeInterval(clockOffset), batchDate: date)
         plan = (try? await engine.scan(now: Date().addingTimeInterval(clockOffset))) ?? plan
         initialDone = true
         reloadJournal()

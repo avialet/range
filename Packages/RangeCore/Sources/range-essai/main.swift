@@ -74,7 +74,7 @@ func run() async throws {
         }
     }
     if command == "ranger" {
-        let result = await engine.apply(trigger: .manual, now: Date())
+        let result = try await engine.apply(only: Set(plan.ready.map(\.id)), trigger: .manual, now: Date())
         print("\nranges : \(result.moves.count), echecs : \(result.failures.count)")
         for f in result.failures { print("  echec : \(f.path) \(f.reason)") }
     }

@@ -26,6 +26,7 @@ public actor RangeEngine {
     let trasher: any Trasher
     let mounted: @Sendable () -> Set<String>?
     let reader = FactsReader()
+    let probe: any FileProbe = DiskProbe()
     private var tracker = StabilityTracker()
     private let cancelFlag = Flag()
     /// Dates d'arrivee imposees par nom (essais sur un clone, captures) : un clone arrive « maintenant ».
@@ -43,6 +44,7 @@ public actor RangeEngine {
     public func update(settings: EngineSettings) {
         if settings.folder != self.settings.folder { tracker = StabilityTracker() }
         self.settings = settings
+        plan = .empty
     }
 
     public func setAddedOverrides(_ overrides: [String: Date]) {
@@ -57,7 +59,13 @@ public actor RangeEngine {
     /// Une passe : lecture du premier niveau, stabilite, plan. Rien n'est deplace.
     @discardableResult
     public func scan(now: Date) throws -> Plan {
-        var facts = try reader.read(path: settings.folder)
+        var facts: [FileFacts]
+        do {
+            facts = try reader.read(path: settings.folder)
+        } catch {
+            plan = .empty
+            throw error
+        }
         if !addedOverrides.isEmpty {
             for i in facts.indices { if let date = addedOverrides[facts[i].name] { facts[i].added = date } }
         }
@@ -68,17 +76,24 @@ public actor RangeEngine {
         let context = PlanContext(now: now, grace: settings.grace, folder: settings.folder, home: settings.home,
                                   stablePaths: stable, mountedImages: images,
                                   held: (try? journal.heldInodes()) ?? [])
-        plan = Planner.plan(facts, rules: rules, context: context, probe: DiskProbe())
+        plan = Planner.plan(facts, rules: rules, context: context, probe: probe)
         return plan
     }
 
-    /// Applique les actions pretes du dernier plan, sauf les chemins decoches.
-    public func apply(excluding: Set<String> = [], trigger: BatchTrigger, now: Date) -> ApplyResult {
+    /// Applique les actions designees (identifiants affiches et coches), apres une nouvelle passe : seules
+    /// celles encore pretes, avec la meme regle et la meme operation qu'a l'apercu, sont faites (image
+    /// montee depuis, `.part` apparu, original d'un doublon change, dossier d'archive disparu : rien).
+    public func apply(only ids: Set<String>, trigger: BatchTrigger, now: Date, batchDate: Date? = nil) throws -> ApplyResult {
+        let shown = Dictionary(plan.actions.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        let fresh = try scan(now: now)
+        let actions = fresh.ready.filter { action in
+            guard ids.contains(action.id), let before = shown[action.id] else { return false }
+            return before.ruleId == action.ruleId && before.operation == action.operation && before.facts.signature == action.facts.signature
+        }
         cancelFlag.set(false)
         let flag = cancelFlag
-        let actions = plan.ready.filter { !excluding.contains($0.id) }
-        let result = Executor(journal: journal, trasher: trasher, reader: reader)
-            .apply(actions, trigger: trigger, now: now, shouldContinue: { !flag.value })
+        let result = Executor(journal: journal, trasher: trasher, probe: probe, reader: reader)
+            .apply(actions, trigger: trigger, now: batchDate ?? now, shouldContinue: { !flag.value })
         let done = Set(result.moves.map(\.source))
         plan.actions.removeAll { done.contains($0.id) }
         return result

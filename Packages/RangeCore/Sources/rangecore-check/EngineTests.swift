@@ -45,7 +45,7 @@ let engineTests: (String, [Test]) = ("Engine", [
             let t0 = Date()
             _ = try blocking { try await e.scan(now: t0) }
             let plan = try blocking { try await e.scan(now: t0.addingTimeInterval(16)) }
-            let result = try blocking { await e.apply(excluding: ["\(bench.downloads.path)/vacances.png"], trigger: .manual, now: Date()) }
+            let result = try blocking { try await e.apply(only: [photo.path], trigger: .manual, now: t0.addingTimeInterval(17)) }
             expectEqual(result.moves.count, 1, "la ligne decochee reste")
             expectEqual(plan.ready.count, 2)
             expect(!FileManager.default.fileExists(atPath: photo.path))
@@ -54,6 +54,46 @@ let engineTests: (String, [Test]) = ("Engine", [
             expect(FileManager.default.fileExists(atPath: photo.path))
             let after = try blocking { try await e.scan(now: t0.addingTimeInterval(40)) }
             expectEqual(after.actions.first { $0.facts.name == "photo.jpg" }?.status, .waiting(.held))
+        }
+    },
+    Test("applyRechecksBeforeActing") {
+        try withTemporaryDirectory { dir in
+            let bench = try Bench(dir)
+            let original = try makeFile(bench.downloads, "rapport.pdf", "meme")
+            try makeFile(bench.downloads, "rapport (1).pdf", "meme")
+            let photo = try makeFile(bench.downloads, "photo.jpg")
+            let e = engine(bench)
+            let t0 = Date()
+            _ = try blocking { try await e.scan(now: t0) }
+            let plan = try blocking { try await e.scan(now: t0.addingTimeInterval(16)) }
+            expectEqual(plan.ready.count, 2)
+            // Entre l'apercu et le clic : l'original du doublon change, un .part apparait a cote de la photo.
+            try Data("autre contenu".utf8).write(to: original)
+            try makeFile(bench.downloads, "photo.jpg.part")
+            let ids = Set(plan.ready.map(\.id))
+            let result = try blocking { try await e.apply(only: ids, trigger: .manual, now: t0.addingTimeInterval(17)) }
+            expectEqual(result.moves.count, 0, "plus rien de sur")
+            expect(FileManager.default.fileExists(atPath: photo.path))
+            expect(FileManager.default.fileExists(atPath: bench.downloads.path + "/rapport (1).pdf"))
+        }
+    },
+    Test("planEmptiedOnFailureAndSettings") {
+        try withTemporaryDirectory { dir in
+            let bench = try Bench(dir)
+            try makeFile(bench.downloads, "photo.jpg")
+            let e = engine(bench)
+            let t0 = Date()
+            _ = try blocking { try await e.scan(now: t0) }
+            _ = try blocking { try await e.scan(now: t0.addingTimeInterval(16)) }
+            expect(!(try blocking { await e.plan.actions.isEmpty }))
+            chmod(bench.downloads.path, 0o000)
+            _ = try? blocking { try await e.scan(now: t0.addingTimeInterval(20)) }
+            chmod(bench.downloads.path, 0o755)
+            expect(try blocking { await e.plan.actions.isEmpty }, "passe en echec")
+            _ = try blocking { try await e.scan(now: t0.addingTimeInterval(40)) }
+            let settings = EngineSettings(folder: bench.downloads.path, home: bench.home.path, grace: 60)
+            try blocking { await e.update(settings: settings) }
+            expect(try blocking { await e.plan.actions.isEmpty }, "reglages changes")
         }
     },
     Test("rulesAreSavedAndMerged") {
