@@ -76,10 +76,10 @@ public struct Rule: Codable, Equatable, Sendable, Identifiable {
 public struct RuleNeighbourhood: Sendable {
     public var names: Set<String>
     public var directories: Set<String>
-    public var folder: URL
+    public var folder: String
     public var probe: any FileProbe
 
-    public init(names: Set<String>, directories: Set<String>, folder: URL, probe: any FileProbe) {
+    public init(names: Set<String>, directories: Set<String>, folder: String, probe: any FileProbe) {
         self.names = names
         self.directories = directories
         self.folder = folder
@@ -111,7 +111,7 @@ extension Rule {
         case .browserDuplicate?:
             guard !f.isDirectory, let original = NameNormalizer.duplicateOriginal(of: f.name),
                   hood.names.contains(original) else { return false }
-            return hood.probe.identical(f.url, hood.folder.appendingPathComponent(original))
+            return hood.probe.identical(f.path, FilePath.join(hood.folder, original))
         case .openedArchive?:
             guard f.kind == .archive, !f.isDirectory else { return false }
             return hood.directories.contains(NameNormalizer.split(f.name).base)

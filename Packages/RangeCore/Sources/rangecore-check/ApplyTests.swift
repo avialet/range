@@ -19,13 +19,13 @@ struct Bench {
         journal = Journal(database: try AppDatabase.inMemory())
     }
 
-    var executor: Executor { Executor(journal: journal, trasher: FolderTrasher(folder: trash)) }
+    var executor: Executor { Executor(journal: journal, trasher: FolderTrasher(folder: trash.path)) }
     var undoer: Undoer { Undoer(journal: journal) }
 
     /// Plan complet sur le disque, tout etant declare stable et sans delai de grace.
     func plan(rules: [Rule] = DefaultRules.all, now: Date = Date()) throws -> Plan {
         let facts = try FactsReader().read(folder: downloads)
-        let context = PlanContext(now: now, grace: 0, folder: downloads, home: home,
+        let context = PlanContext(now: now, grace: 0, folder: downloads.path, home: home.path,
                                   stablePaths: Set(facts.map(\.path)), mountedImages: [], held: [])
         return Planner.plan(facts, rules: rules, context: context, probe: DiskProbe())
     }
@@ -97,10 +97,10 @@ let applyTests: (String, [Test]) = ("Apply", [
             try makeFile(bench.downloads, "Facture 9.pdf", "nouvelle")
             let plan = try bench.plan()
             guard case .move(let target)? = plan.ready.first?.operation else { return expect(false, "pas de deplacement") }
-            try makeFile(target.deletingLastPathComponent(), "Facture 9.pdf", "ancienne")
+            try makeFile(URL(fileURLWithPath: FilePath.parent(target)), "Facture 9.pdf", "ancienne")
             let result = bench.executor.apply(plan.ready, trigger: .manual, now: Date())
-            expectEqual(result.moves.first?.destination, target.deletingLastPathComponent().appendingPathComponent("Facture 9 2.pdf").path)
-            expectEqual(try String(contentsOf: target, encoding: .utf8), "ancienne", "jamais ecrase")
+            expectEqual(result.moves.first?.destination, FilePath.join(FilePath.parent(target), "Facture 9 2.pdf"))
+            expectEqual(try String(contentsOfFile: target, encoding: .utf8), "ancienne", "jamais ecrase")
         }
     },
     Test("identicalAtDestinationGoesToTrash") {
@@ -109,7 +109,7 @@ let applyTests: (String, [Test]) = ("Apply", [
             try makeFile(bench.downloads, "Facture 9.pdf", "meme")
             let plan = try bench.plan()
             guard case .move(let target)? = plan.ready.first?.operation else { return expect(false, "pas de deplacement") }
-            try makeFile(target.deletingLastPathComponent(), "Facture 9.pdf", "meme")
+            try makeFile(URL(fileURLWithPath: FilePath.parent(target)), "Facture 9.pdf", "meme")
             let result = bench.executor.apply(plan.ready, trigger: .manual, now: Date())
             expectEqual(result.moves.first?.kind, .trash)
             expectEqual(result.moves.first?.reason, TrashReason.alreadyAtDestination.rawValue)

@@ -3,7 +3,8 @@ import Foundation
 /// Ce que Range sait d'un element du premier niveau du dossier surveille. Tout le reste
 /// (detection, regles, plan) travaille sur ces faits, sans toucher au disque.
 public struct FileFacts: Sendable, Equatable, Hashable {
-    public var url: URL
+    /// Chemin exact (octets du nom gardes, voir `FilePath`).
+    public var path: String
     public var name: String
     public var isDirectory: Bool
     public var kind: FileKind
@@ -19,9 +20,9 @@ public struct FileFacts: Sendable, Equatable, Hashable {
     public var agent: String?
     public var isScreenCapture: Bool
 
-    public init(url: URL, name: String, isDirectory: Bool, kind: FileKind, size: Int64, modified: Date, added: Date,
+    public init(path: String, name: String, isDirectory: Bool, kind: FileKind, size: Int64, modified: Date, added: Date,
                 inode: UInt64, sources: [String] = [], agent: String? = nil, isScreenCapture: Bool = false) {
-        self.url = url
+        self.path = path
         self.name = name
         self.isDirectory = isDirectory
         self.kind = kind
@@ -34,7 +35,8 @@ public struct FileFacts: Sendable, Equatable, Hashable {
         self.isScreenCapture = isScreenCapture
     }
 
-    public var path: String { url.path }
+    /// Pour lire (icone, attributs) ; jamais pour creer un nom.
+    public var url: URL { URL(fileURLWithPath: path) }
 
     /// Ce qui doit rester identique entre l'aperçu et le deplacement.
     public var signature: FileSignature { FileSignature(inode: inode, size: size, modified: modified) }

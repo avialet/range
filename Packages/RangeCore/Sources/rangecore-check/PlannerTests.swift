@@ -5,9 +5,9 @@ import RangeCore
 struct FakeProbe: FileProbe {
     var existing: Set<String> = []
     var identicalPairs: Set<[String]> = []
-    func exists(_ url: URL) -> Bool { existing.contains(url.path) }
-    func identical(_ a: URL, _ b: URL) -> Bool {
-        identicalPairs.contains([a.path, b.path]) || identicalPairs.contains([b.path, a.path])
+    func exists(_ path: String) -> Bool { existing.contains(path) }
+    func identical(_ a: String, _ b: String) -> Bool {
+        identicalPairs.contains([a, b]) || identicalPairs.contains([b, a])
     }
 }
 
@@ -15,16 +15,16 @@ private let now = DateComponents(calendar: Calendar(identifier: .gregorian), tim
                                  year: 2026, month: 10, day: 14, hour: 12).date!
 private let day: TimeInterval = 86400
 
-private func context(_ facts: [FileFacts], stable: Bool = true, mounted: Set<String>? = [], held: Set<UInt64> = [],
+private func context(_ facts: [FileFacts], stable: Bool = true, mounted: Set<UInt64>? = [], held: Set<UInt64> = [],
                      grace: TimeInterval = 600) -> PlanContext {
     var cal = Calendar(identifier: .gregorian)
     cal.timeZone = TimeZone(identifier: "Europe/Paris")!
-    return PlanContext(now: now, grace: grace, folder: URL(fileURLWithPath: "/dl"), home: URL(fileURLWithPath: "/h"),
+    return PlanContext(now: now, grace: grace, folder: "/dl", home: "/h",
                        stablePaths: stable ? Set(facts.map(\.path)) : [], mountedImages: mounted, held: held, calendar: cal)
 }
 
 private func plan(_ facts: [FileFacts], rules: [Rule] = DefaultRules.all, probe: FakeProbe = FakeProbe(),
-                  stable: Bool = true, mounted: Set<String>? = [], held: Set<UInt64> = [], grace: TimeInterval = 600) -> Plan {
+                  stable: Bool = true, mounted: Set<UInt64>? = [], held: Set<UInt64> = [], grace: TimeInterval = 600) -> Plan {
     Planner.plan(facts, rules: rules, context: context(facts, stable: stable, mounted: mounted, held: held, grace: grace), probe: probe)
 }
 
@@ -46,7 +46,7 @@ let plannerTests: (String, [Test]) = ("Planner", [
         expectEqual(p.ready.count, 1)
     },
     Test("mountedImageIsNeverTouched") {
-        let p = plan([old("App.dmg", days: 8)], mounted: ["/dl/App.dmg"])
+        let p = plan([old("App.dmg", days: 8)], mounted: [old("App.dmg").inode])
         expectEqual(p.actions.first?.status, .waiting(.mounted))
         let unknown = plan([old("App.dmg", days: 8)], mounted: nil)
         expectEqual(unknown.actions.first?.status, .waiting(.mounted), "hdiutil muet : prudence")
@@ -67,7 +67,7 @@ let plannerTests: (String, [Test]) = ("Planner", [
     Test("invoicesMoveByYear") {
         let f = old("Facture 2026-031.pdf", days: 20)
         let p = plan([f])
-        expectEqual(p.actions.first?.operation, .move(to: URL(fileURLWithPath: "/h/Documents/Factures/2026/Facture 2026-031.pdf")))
+        expectEqual(p.actions.first?.operation, .move(to: "/h/Documents/Factures/2026/Facture 2026-031.pdf"))
         expectEqual(p.actions.first?.status, .ready)
         let fromStripe = plan([old("doc.pdf", days: 1, sources: ["https://pay.stripe.com/receipts/1"])])
         expectEqual(fromStripe.actions.first?.ruleId, "invoices")
@@ -78,10 +78,10 @@ let plannerTests: (String, [Test]) = ("Planner", [
         let flagged = old("sans-nom.png", days: 14, capture: true)
         let p = plan([shot, photo, flagged])
         expectEqual(p.actions.first { $0.facts.name == shot.name }?.operation,
-                    .move(to: URL(fileURLWithPath: "/h/Pictures/Captures/2026-09/\(shot.name)")))
+                    .move(to: "/h/Pictures/Captures/2026-09/\(shot.name)"))
         expectEqual(p.actions.first { $0.facts.name == "sans-nom.png" }?.ruleId, "screenshots")
         expectEqual(p.actions.first { $0.facts.name == "vacances.jpg" }?.operation,
-                    .move(to: URL(fileURLWithPath: "/h/Pictures/T\u{00E9}l\u{00E9}charg\u{00E9}es/2026-09/vacances.jpg")))
+                    .move(to: "/h/Pictures/T\u{00E9}l\u{00E9}charg\u{00E9}es/2026-09/vacances.jpg"))
     },
     Test("restIsOffByDefault") {
         let p = plan([old("notes.txt", days: 60)])
@@ -127,7 +127,7 @@ let plannerTests: (String, [Test]) = ("Planner", [
         let target = "/h/Pictures/T\u{00E9}l\u{00E9}charg\u{00E9}es/2026-09/vacances.jpg"
         let taken = FakeProbe(existing: [target, "/h/Pictures/T\u{00E9}l\u{00E9}charg\u{00E9}es/2026-09/vacances 2.jpg"])
         expectEqual(plan([f], probe: taken).actions.first?.operation,
-                    .move(to: URL(fileURLWithPath: "/h/Pictures/T\u{00E9}l\u{00E9}charg\u{00E9}es/2026-09/vacances 3.jpg")))
+                    .move(to: "/h/Pictures/T\u{00E9}l\u{00E9}charg\u{00E9}es/2026-09/vacances 3.jpg"))
         let same = FakeProbe(existing: [target], identicalPairs: [["/dl/vacances.jpg", target]])
         expectEqual(plan([f], probe: same).actions.first?.operation, .trash(.alreadyAtDestination))
     },

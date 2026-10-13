@@ -18,7 +18,37 @@ func snapshotTree(_ root: URL) -> [String: String] {
     return tree
 }
 
+/// Cree un fichier avec exactement ces octets de nom (sans normalisation de Foundation).
+func makeRawFile(_ dir: URL, _ name: String, _ text: String = "x") {
+    let path = dir.path + "/" + name
+    let fd = path.withCString { open($0, O_CREAT | O_EXCL | O_WRONLY, 0o644) }
+    if fd >= 0 { _ = text.withCString { write(fd, $0, strlen($0)) }; close(fd) }
+}
+
+/// Noms du dossier en octets (hexadecimal), tries.
+func rawNames(_ dir: URL) -> [String] {
+    ((try? FileManager.default.contentsOfDirectory(atPath: dir.path)) ?? [])
+        .map { $0.utf8.map { String(format: "%02x", $0) }.joined() }.sorted()
+}
+
 let undoTests: (String, [Test]) = ("Undo", [
+    Test("accentedNamesKeepTheirBytes") {
+        try withTemporaryDirectory { dir in
+            let bench = try Bench(dir)
+            makeRawFile(bench.downloads, "\u{E9}t\u{E9} compos\u{E9}.jpg", "a")
+            makeRawFile(bench.downloads, "e\u{301}te\u{301} de\u{301}compose\u{301}.jpg", "b")
+            makeRawFile(bench.downloads, "\u{C9}meute (1).png", "c")
+            let before = rawNames(bench.downloads)
+            expectEqual(before.count, 3)
+            let result = bench.executor.apply(try bench.plan().ready, trigger: .manual, now: Date())
+            expectEqual(result.moves.count, 3)
+            let moved = result.moves.map { URL(fileURLWithPath: $0.destination).deletingLastPathComponent() }
+            expectEqual(Set(moved.flatMap(rawNames)), Set(before), "noms gardes a destination")
+            guard let id = result.batchId else { return expect(false, "pas de lot") }
+            _ = bench.undoer.undoBatch(id, now: Date())
+            expectEqual(rawNames(bench.downloads), before, "memes octets au retour")
+        }
+    },
     Test("undoBatchRestoresEverything") {
         try withTemporaryDirectory { dir in
             let bench = try Bench(dir)
@@ -57,7 +87,7 @@ let undoTests: (String, [Test]) = ("Undo", [
             expect(try bench.journal.heldInodes().contains(UInt64(st.st_ino)))
             let facts = try FactsReader().read(folder: bench.downloads)
             let plan = Planner.plan(facts, rules: DefaultRules.all,
-                                    context: PlanContext(now: Date(), grace: 0, folder: bench.downloads, home: bench.home,
+                                    context: PlanContext(now: Date(), grace: 0, folder: bench.downloads.path, home: bench.home.path,
                                                          stablePaths: Set(facts.map(\.path)), mountedImages: [],
                                                          held: try bench.journal.heldInodes()),
                                     probe: DiskProbe())
@@ -74,8 +104,8 @@ let undoTests: (String, [Test]) = ("Undo", [
             try makeFile(bench.downloads, "photo.jpg", "seconde")
             guard let move = result.moves.first else { return expect(false, "rien") }
             let restored = try bench.undoer.undo(move, now: Date())
-            expectEqual(restored.lastPathComponent, "photo 2.jpg")
-            expectEqual(try String(contentsOf: restored, encoding: .utf8), "premiere")
+            expectEqual(FilePath.name(restored), "photo 2.jpg")
+            expectEqual(try String(contentsOfFile: restored, encoding: .utf8), "premiere")
             expectEqual(try String(contentsOf: bench.downloads.appendingPathComponent("photo.jpg"), encoding: .utf8), "seconde")
         }
     },

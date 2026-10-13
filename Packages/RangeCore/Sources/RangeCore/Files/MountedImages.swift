@@ -9,6 +9,14 @@ public enum MountedImages {
         return Set(images.compactMap { $0["image-path"] as? String })
     }
 
+    /// Inodes des images montees (compares par inode : le chemin d'hdiutil peut differer en forme).
+    public static func inodes(of paths: Set<String>) -> Set<UInt64> {
+        Set(paths.compactMap { path in
+            var st = stat()
+            return path.withCString { stat($0, &st) } == 0 ? UInt64(st.st_ino) : nil
+        })
+    }
+
     /// Lance `hdiutil info -plist` (quelques dizaines de ms). Echec : ensemble vide, et l'appelant
     /// reste prudent (voir `RangeEngine`).
     public static func current() -> Set<String>? {

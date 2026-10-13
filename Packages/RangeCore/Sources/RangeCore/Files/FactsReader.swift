@@ -35,41 +35,46 @@ public struct FactsReader: Sendable {
     public init() {}
 
     public func read(folder: URL) throws -> [FileFacts] {
-        let urls: [URL]
+        try read(path: folder.path)
+    }
+
+    /// Chemins batis sur `path` tel que donne, avec les noms tels qu'ecrits sur le disque.
+    public func read(path: String) throws -> [FileFacts] {
+        let names: [String]
         do {
-            urls = try FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: Self.keys, options: [])
+            names = try FileManager.default.contentsOfDirectory(atPath: path)
         } catch {
             throw FolderAccessError.from(error)
         }
-        // Chemins batis sur `folder` tel que donne (contentsOfDirectory peut ajouter /private).
-        return urls.compactMap { facts(of: folder.appendingPathComponent($0.lastPathComponent)) }
+        return names.compactMap { facts(atPath: FilePath.join(path, $0)) }
     }
 
     /// Faits d'un element, nil s'il a disparu entre-temps.
-    public func facts(of url: URL) -> FileFacts? {
+    public func facts(atPath path: String) -> FileFacts? {
         var st = stat()
-        guard lstat(url.path, &st) == 0 else { return nil }
+        guard path.withCString({ lstat($0, &st) }) == 0 else { return nil }
+        let url = URL(fileURLWithPath: path)
         let values = try? url.resourceValues(forKeys: Set(Self.keys))
         let isDirectory = (st.st_mode & S_IFMT) == S_IFDIR
         let isPackage = values?.isPackage ?? false
-        let name = values?.name ?? url.lastPathComponent
+        let name = FilePath.name(path)
         let modified = values?.contentModificationDate
             ?? Date(timeIntervalSince1970: TimeInterval(st.st_mtimespec.tv_sec))
         let added = values?.addedToDirectoryDate ?? values?.creationDate ?? modified
         let ext = NameNormalizer.split(name).ext
         let lastExt = (name as NSString).pathExtension
         let kind = FileKind.classify(extension: ext.contains(".") ? lastExt : ext, isDirectory: isDirectory, isPackage: isPackage)
-        let quarantine = Self.xattrString(url.path, "com.apple.quarantine")
+        let quarantine = Self.xattrString(path, "com.apple.quarantine")
         let agent = quarantine.flatMap { q -> String? in
             let parts = q.split(separator: ";", omittingEmptySubsequences: false)
             return parts.count > 2 && !parts[2].isEmpty ? String(parts[2]) : nil
         }
-        return FileFacts(url: url, name: name, isDirectory: isDirectory, kind: kind,
+        return FileFacts(path: path, name: name, isDirectory: isDirectory, kind: kind,
                          size: isDirectory ? 0 : Int64(st.st_size), modified: modified, added: added,
                          inode: UInt64(st.st_ino),
-                         sources: Self.xattrPlist(url.path, "com.apple.metadata:kMDItemWhereFroms") as? [String] ?? [],
+                         sources: Self.xattrPlist(path, "com.apple.metadata:kMDItemWhereFroms") as? [String] ?? [],
                          agent: agent,
-                         isScreenCapture: Self.xattrPlist(url.path, "com.apple.metadata:kMDItemIsScreenCapture") as? Bool ?? false)
+                         isScreenCapture: Self.xattrPlist(path, "com.apple.metadata:kMDItemIsScreenCapture") as? Bool ?? false)
     }
 
     static func xattrData(_ path: String, _ name: String) -> Data? {

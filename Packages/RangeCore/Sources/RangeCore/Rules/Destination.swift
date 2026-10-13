@@ -1,36 +1,34 @@
 import Foundation
 
 public enum Destination {
-    /// Dossier final : destination (`~` = `home`) puis sous-dossier date.
-    public static func folder(_ destination: String, subfolder: Subfolder, date: Date, home: URL,
-                              calendar: Calendar) -> URL {
-        var url = resolve(destination, home: home)
+    /// Dossier final : destination (`~` = `home`) puis sous-dossier date. Chemin en chaine (voir `FilePath`).
+    public static func folder(_ destination: String, subfolder: Subfolder, date: Date, home: String,
+                              calendar: Calendar) -> String {
+        let base = resolve(destination, home: home)
         let c = calendar.dateComponents([.year, .month], from: date)
         switch subfolder {
-        case .none:
-            break
-        case .year:
-            url.appendPathComponent(String(format: "%04d", c.year ?? 0), isDirectory: true)
-        case .month:
-            url.appendPathComponent(String(format: "%04d-%02d", c.year ?? 0, c.month ?? 0), isDirectory: true)
+        case .none: return base
+        case .year: return FilePath.join(base, String(format: "%04d", c.year ?? 0))
+        case .month: return FilePath.join(base, String(format: "%04d-%02d", c.year ?? 0, c.month ?? 0))
         }
-        return url
     }
 
-    public static func resolve(_ destination: String, home: URL) -> URL {
-        if destination == "~" { return home }
-        if destination.hasPrefix("~/") {
-            return home.appendingPathComponent(String(destination.dropFirst(2)), isDirectory: true)
+    public static func resolve(_ destination: String, home: String) -> String {
+        let path: String
+        if destination == "~" {
+            path = home
+        } else if destination.hasPrefix("~/") {
+            path = FilePath.join(home, String(destination.dropFirst(2)))
+        } else {
+            path = destination
         }
-        return URL(fileURLWithPath: destination, isDirectory: true)
+        return path.count > 1 && path.hasSuffix("/") ? String(path.dropLast()) : path
     }
 
     /// Chemin relatif au dossier personnel (`~/...`) quand c'est possible.
-    public static func abbreviate(_ url: URL, home: URL) -> String {
-        let path = url.standardizedFileURL.path
-        let base = home.standardizedFileURL.path
-        if path == base { return "~" }
-        if path.hasPrefix(base + "/") { return "~/" + path.dropFirst(base.count + 1) }
+    public static func abbreviate(_ path: String, home: String) -> String {
+        if path == home { return "~" }
+        if path.hasPrefix(home + "/") { return "~/" + path.dropFirst(home.count + 1) }
         return path
     }
 

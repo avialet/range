@@ -18,8 +18,8 @@ final class ResultBox<T: Sendable>: @unchecked Sendable {
 }
 
 private func engine(_ bench: Bench, grace: TimeInterval = 0, mounted: Set<String>? = []) -> RangeEngine {
-    RangeEngine(journal: bench.journal, trasher: FolderTrasher(folder: bench.trash),
-                settings: EngineSettings(folder: bench.downloads, home: bench.home, grace: grace),
+    RangeEngine(journal: bench.journal, trasher: FolderTrasher(folder: bench.trash.path),
+                settings: EngineSettings(folder: bench.downloads.path, home: bench.home.path, grace: grace),
                 mounted: { mounted })
 }
 

@@ -22,7 +22,7 @@ public struct UndoFailure: Sendable, Equatable {
 }
 
 public struct UndoResult: Sendable, Equatable {
-    public var restored: [URL]
+    public var restored: [String]
     public var failures: [UndoFailure]
 }
 
@@ -37,41 +37,38 @@ public struct Undoer: Sendable {
     public func state(of move: MoveRecord) -> UndoState {
         if move.undoneAt != nil { return .undone }
         var st = stat()
-        guard lstat(move.destination, &st) == 0 else { return .gone }
+        guard move.destination.withCString({ lstat($0, &st) }) == 0 else { return .gone }
         guard Int64(bitPattern: UInt64(st.st_ino)) == move.inode else { return .changed }
         if !move.isDirectory, Int64(st.st_size) != move.size { return .changed }
         return .undoable
     }
 
     /// Renvoie l'emplacement retrouve (le nom d'origine, ou « nom 2.ext » s'il est repris).
-    public func undo(_ move: MoveRecord, now: Date) throws -> URL {
+    public func undo(_ move: MoveRecord, now: Date) throws -> String {
         switch state(of: move) {
         case .undone: throw UndoError.alreadyUndone
         case .gone: throw UndoError.gone
         case .changed: throw UndoError.changed
         case .undoable: break
         }
-        let source = URL(fileURLWithPath: move.source)
-        let folder = source.deletingLastPathComponent()
-        var isDir: ObjCBool = false
-        guard FileManager.default.fileExists(atPath: folder.path, isDirectory: &isDir), isDir.boolValue else {
-            throw UndoError.sourceFolderMissing
-        }
-        var target = source
+        let folder = FilePath.parent(move.source)
+        guard FileOps.isDirectory(folder) else { throw UndoError.sourceFolderMissing }
+        // Le nom d'origine, octet pour octet ; s'il est repris, « nom 2.ext ».
+        var target = move.source
         var n = 2
-        while DiskProbe().exists(target) {
-            target = folder.appendingPathComponent(NameNormalizer.variant(source.lastPathComponent, number: n))
+        while FileOps.exists(target) {
+            target = FilePath.join(folder, NameNormalizer.variant(FilePath.name(move.source), number: n))
             n += 1
         }
         do {
-            try FileManager.default.moveItem(at: URL(fileURLWithPath: move.destination), to: target)
+            try FileOps.renameExclusive(move.destination, target)
         } catch {
             if case .denied = FolderAccessError.from(error) { throw UndoError.denied }
             throw UndoError.failed((error as NSError).localizedDescription)
         }
         Executor.removeEmpty(move.createdDirs)
-        if let id = move.id { try journal.markUndone(moveId: id, at: now, restoredTo: target.path) }
-        try journal.hold(inode: UInt64(bitPattern: move.inode), path: target.path, date: now)
+        if let id = move.id { try journal.markUndone(moveId: id, at: now, restoredTo: target) }
+        try journal.hold(inode: UInt64(bitPattern: move.inode), path: target, date: now)
         return target
     }
 

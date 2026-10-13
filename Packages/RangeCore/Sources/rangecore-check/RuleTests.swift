@@ -31,16 +31,28 @@ let ruleTests: (String, [Test]) = ("Rules", [
         expectEqual(merged.last?.id, "rest")
     },
     Test("destinationResolvesHomeAndSubfolder") {
-        let home = URL(fileURLWithPath: "/Users/test")
+        let home = "/Users/test"
         var cal = Calendar(identifier: .gregorian)
         cal.timeZone = TimeZone(identifier: "Europe/Paris")!
         let date = DateComponents(calendar: cal, year: 2026, month: 3, day: 14, hour: 12).date!
-        expectEqual(Destination.folder("~/Documents/Factures", subfolder: .year, date: date, home: home, calendar: cal).path,
+        expectEqual(Destination.folder("~/Documents/Factures", subfolder: .year, date: date, home: home, calendar: cal),
                     "/Users/test/Documents/Factures/2026")
-        expectEqual(Destination.folder("~/Pictures/Captures", subfolder: .month, date: date, home: home, calendar: cal).path,
+        expectEqual(Destination.folder("~/Pictures/Captures", subfolder: .month, date: date, home: home, calendar: cal),
                     "/Users/test/Pictures/Captures/2026-03")
-        expectEqual(Destination.folder("/Volumes/Data/Ranges", subfolder: .none, date: date, home: home, calendar: cal).path,
+        expectEqual(Destination.folder("/Volumes/Data/Ranges", subfolder: .none, date: date, home: home, calendar: cal),
                     "/Volumes/Data/Ranges")
+    },
+    Test("abbreviateKeepsPrivatePrefix") {
+        let home = "/private/tmp/essai/home"
+        expectEqual(Destination.abbreviate("/private/tmp/essai/home/Documents/Factures/2026/a.pdf", home: home),
+                    "~/Documents/Factures/2026/a.pdf")
+        expectEqual(Destination.abbreviate(home, home: home), "~")
+        expectEqual(Destination.abbreviate("/Volumes/X/a", home: home), "/Volumes/X/a")
+        try withTemporaryDirectory { dir in
+            // Dossier personnel existant sous /private, destination pas encore creee.
+            let real = dir.path.hasPrefix("/private") ? dir.path : "/private" + dir.path
+            expectEqual(Destination.abbreviate(real + "/Pictures/Neuf/a.png", home: real), "~/Pictures/Neuf/a.png")
+        }
     },
     Test("destinationDisplayNames") {
         expectEqual(Destination.display("~/Documents/Factures"), "Documents \u{203A} Factures")

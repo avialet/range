@@ -2,13 +2,13 @@ import Foundation
 
 public struct EngineSettings: Sendable, Equatable {
     /// Dossier surveille (Telechargements).
-    public var folder: URL
+    public var folder: String
     /// Dossier personnel pour les destinations `~/...`.
-    public var home: URL
+    public var home: String
     /// Delai de grace depuis l'arrivee, en secondes.
     public var grace: TimeInterval
 
-    public init(folder: URL, home: URL, grace: TimeInterval) {
+    public init(folder: String, home: String, grace: TimeInterval) {
         self.folder = folder
         self.home = home
         self.grace = grace
@@ -28,6 +28,8 @@ public actor RangeEngine {
     let reader = FactsReader()
     private var tracker = StabilityTracker()
     private let cancelFlag = Flag()
+    /// Dates d'arrivee imposees par nom (essais sur un clone, captures) : un clone arrive « maintenant ».
+    private var addedOverrides: [String: Date] = [:]
 
     public init(journal: Journal, trasher: any Trasher, settings: EngineSettings,
                 mounted: @escaping @Sendable () -> Set<String>? = { MountedImages.current() }) {
@@ -43,6 +45,10 @@ public actor RangeEngine {
         self.settings = settings
     }
 
+    public func setAddedOverrides(_ overrides: [String: Date]) {
+        addedOverrides = overrides
+    }
+
     public func setRules(_ rules: [Rule]) throws {
         self.rules = rules
         try journal.saveRules(rules)
@@ -51,11 +57,14 @@ public actor RangeEngine {
     /// Une passe : lecture du premier niveau, stabilite, plan. Rien n'est deplace.
     @discardableResult
     public func scan(now: Date) throws -> Plan {
-        let facts = try reader.read(folder: settings.folder)
+        var facts = try reader.read(path: settings.folder)
+        if !addedOverrides.isEmpty {
+            for i in facts.indices { if let date = addedOverrides[facts[i].name] { facts[i].added = date } }
+        }
         tracker.observe(facts, now: now)
         try? journal.pruneHeld(present: Set(facts.map(\.inode)))
         let stable = Set(facts.filter { tracker.isStable($0, now: now) }.map(\.path))
-        let images: Set<String>? = facts.contains { $0.kind == .diskImage } ? mounted() : []
+        let images: Set<UInt64>? = facts.contains { $0.kind == .diskImage } ? mounted().map(MountedImages.inodes) : []
         let context = PlanContext(now: now, grace: settings.grace, folder: settings.folder, home: settings.home,
                                   stablePaths: stable, mountedImages: images,
                                   held: (try? journal.heldInodes()) ?? [])
@@ -90,7 +99,7 @@ public actor RangeEngine {
         return undoBatch(id, now: now)
     }
 
-    public func undo(moveId: Int64, now: Date) throws -> URL {
+    public func undo(moveId: Int64, now: Date) throws -> String {
         guard let move = try journal.database.read({ db in try MoveRecord.fetchOne(db, key: moveId) }) else {
             throw UndoError.gone
         }

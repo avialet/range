@@ -27,7 +27,7 @@ public struct ApplyResult: Sendable, Equatable {
 
 /// Applique les actions pretes d'un plan, fichier par fichier, et les inscrit au journal.
 /// Chaque fichier est reverifie juste avant (meme inode, meme taille, meme date) ; rien n'est jamais
-/// ecrase (`moveItem` refuse une destination existante) ; la corbeille seulement.
+/// ecrase (renommage `RENAME_EXCL`) ; la corbeille seulement ; jamais vers un autre volume.
 public struct Executor: Sendable {
     let journal: Journal
     let trasher: any Trasher
@@ -65,36 +65,35 @@ public struct Executor: Sendable {
 
     private func perform(_ action: PlannedAction, batchId: Int64, now: Date) -> Result<MoveRecord, ApplyFailure> {
         let planned = action.facts
-        guard let current = reader.facts(of: planned.url) else { return .failure(.vanished) }
+        guard let current = reader.facts(atPath: planned.path) else { return .failure(.vanished) }
         guard current.signature == planned.signature else { return .failure(.changed) }
-        func record(_ destination: URL, _ kind: MoveKind, reason: TrashReason? = nil, created: [String] = []) -> MoveRecord {
-            MoveRecord(batchId: batchId, date: now, source: planned.path, destination: destination.path, kind: kind,
+        func record(_ destination: String, _ kind: MoveKind, reason: TrashReason? = nil, created: [String] = []) -> MoveRecord {
+            MoveRecord(batchId: batchId, date: now, source: planned.path, destination: destination, kind: kind,
                        ruleId: action.ruleId, reason: reason?.rawValue, inode: Int64(bitPattern: current.inode),
                        size: current.size, isDirectory: current.isDirectory, createdDirs: created)
         }
         switch action.operation {
         case .trash(let reason):
             do {
-                return .success(record(try trasher.trash(planned.url), .trash, reason: reason))
+                return .success(record(try trasher.trash(planned.path), .trash, reason: reason))
             } catch {
                 return .failure(Self.failure(error))
             }
         case .move(let target):
-            let folder = target.deletingLastPathComponent()
-            guard Self.sameVolume(planned.url, folder) else { return .failure(.otherVolume) }
+            let folder = FilePath.parent(target)
+            guard Self.sameVolume(planned.path, folder) else { return .failure(.otherVolume) }
             var created: [String] = []
             do {
                 created = try Self.createFolders(folder)
                 // Un nom pris entre l'apercu et maintenant : variante, ou corbeille si c'est le meme contenu.
                 var reserved: Set<String> = []
-                let final = Planner.resolve(current, in: folder, probe: probe, reserved: &reserved)
-                switch final {
-                case .move(let url):
-                    try FileManager.default.moveItem(at: planned.url, to: url)
-                    return .success(record(url, .move, created: created))
+                switch Planner.resolve(current, in: folder, probe: probe, reserved: &reserved) {
+                case .move(let path):
+                    try FileOps.renameExclusive(planned.path, path)
+                    return .success(record(path, .move, created: created))
                 case .trash(let reason):
                     Self.removeEmpty(created)
-                    return .success(record(try trasher.trash(planned.url), .trash, reason: reason))
+                    return .success(record(try trasher.trash(planned.path), .trash, reason: reason))
                 }
             } catch {
                 Self.removeEmpty(created)
@@ -104,18 +103,18 @@ public struct Executor: Sendable {
     }
 
     /// Cree les dossiers manquants, du plus haut au plus profond ; renvoie ceux qui ont ete crees.
-    static func createFolders(_ folder: URL) throws -> [String] {
-        var missing: [URL] = []
-        var cursor = folder.standardizedFileURL
-        while !FileManager.default.fileExists(atPath: cursor.path), cursor.path != "/" {
+    static func createFolders(_ folder: String) throws -> [String] {
+        var missing: [String] = []
+        var cursor = folder
+        while !FileOps.exists(cursor), cursor != "/" {
             missing.insert(cursor, at: 0)
-            cursor = cursor.deletingLastPathComponent()
+            cursor = FilePath.parent(cursor)
         }
         var created: [String] = []
         do {
-            for url in missing {
-                try FileManager.default.createDirectory(at: url, withIntermediateDirectories: false)
-                created.append(url.path)
+            for path in missing {
+                try FileOps.makeDirectory(path)
+                created.append(path)
             }
         } catch {
             removeEmpty(created)
@@ -130,27 +129,26 @@ public struct Executor: Sendable {
         for path in folders.reversed() {
             guard let items = try? FileManager.default.contentsOfDirectory(atPath: path) else { continue }
             guard items.allSatisfy({ $0 == ".DS_Store" }) else { break }
-            for item in items { try? FileManager.default.removeItem(atPath: (path as NSString).appendingPathComponent(item)) }
-            _ = rmdir(path)
+            for item in items { _ = FilePath.join(path, item).withCString { unlink($0) } }
+            _ = path.withCString { rmdir($0) }
         }
     }
 
     /// Meme volume que le plus proche dossier existant de la destination.
-    static func sameVolume(_ source: URL, _ folder: URL) -> Bool {
-        var cursor = folder.standardizedFileURL
-        while !FileManager.default.fileExists(atPath: cursor.path), cursor.path != "/" {
-            cursor = cursor.deletingLastPathComponent()
-        }
-        var a = stat(), b = stat()
-        guard lstat(source.path, &a) == 0, stat(cursor.path, &b) == 0 else { return false }
-        return a.st_dev == b.st_dev
+    static func sameVolume(_ source: String, _ folder: String) -> Bool {
+        var cursor = folder
+        while !FileOps.exists(cursor), cursor != "/" { cursor = FilePath.parent(cursor) }
+        var a = stat()
+        guard source.withCString({ lstat($0, &a) }) == 0, let b = FileOps.device(cursor) else { return false }
+        return a.st_dev == b
     }
 
     static func failure(_ error: Error) -> ApplyFailure {
+        if let posix = error as? POSIXError, posix.code == .EXDEV { return .otherVolume }
         switch FolderAccessError.from(error) {
-        case .denied: .denied
-        case .missing: .vanished
-        case .other(let message): .failed(message)
+        case .denied: return .denied
+        case .missing: return .vanished
+        case .other(let message): return .failed(message)
         }
     }
 }

@@ -7,8 +7,7 @@ extension FileFacts {
                        sources: [String] = [], screenCapture: Bool = false, folder: String = "/dl") -> FileFacts {
         let ext = NameNormalizer.split(name).ext.lowercased()
         let lastExt = (name as NSString).pathExtension.lowercased()
-        return FileFacts(url: URL(fileURLWithPath: folder).appendingPathComponent(name, isDirectory: directory),
-                         name: name, isDirectory: directory,
+        return FileFacts(path: FilePath.join(folder, name), name: name, isDirectory: directory,
                          kind: FileKind.classify(extension: ext.contains(".") ? lastExt : ext, isDirectory: directory,
                                                  isPackage: directory && lastExt == "app"),
                          size: size, modified: modified, added: added,

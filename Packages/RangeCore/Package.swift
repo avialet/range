@@ -29,5 +29,11 @@ let package = Package(
             name: "rangecore-check",
             dependencies: ["RangeCore"]
         ),
+        // Essai en ligne de commande sur un dossier jetable (clone de Telechargements) :
+        // apercu, rangement et annulation complete, sans l'app.
+        .executableTarget(
+            name: "range-essai",
+            dependencies: ["RangeCore"]
+        ),
     ]
 )
