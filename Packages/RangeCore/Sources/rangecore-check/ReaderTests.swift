@@ -93,6 +93,27 @@ let readerTests: (String, [Test]) = ("Reader", [
             expect(probe.isEmptyDirectory(empty.path), ".DS_Store seul = vide")
         }
     },
+    Test("zipListingHasATimeout") {
+        try withTemporaryDirectory { dir in
+            func script(_ name: String, _ body: String) throws -> String {
+                let url = try makeFile(dir, name, "#!/bin/sh\n" + body + "\n")
+                chmod(url.path, 0o755)
+                return url.path
+            }
+            let stuck = try script("muet.sh", "trap '' TERM\nsleep 30")
+            let start = Date()
+            expect(DiskProbe.zipEntries("x.zip", executable: stuck, timeout: 0.5) == nil, "delai depasse : rien")
+            expect(Date().timeIntervalSince(start) < 5, "rendu vite malgre un unzip muet")
+            let reader = try script("lit.sh", "cat")
+            let t1 = Date()
+            _ = DiskProbe.zipEntries("x.zip", executable: reader, timeout: 3)
+            expect(Date().timeIntervalSince(t1) < 2, "pas d'attente sur l'entree standard")
+            let ok = try script("ok.sh", "printf 'a.txt\\nb.txt\\n'")
+            expectEqual(DiskProbe.zipEntries("x.zip", executable: ok, timeout: 3) ?? [], ["a.txt", "b.txt"])
+            let fails = try script("ko.sh", "exit 9")
+            expect(DiskProbe.zipEntries("x.zip", executable: fails, timeout: 3) == nil, "erreur : rien")
+        }
+    },
     Test("cachingProbeRereadsOnlyChangedFiles") {
         try withTemporaryDirectory { dir in
             let a = try makeFile(dir, "a.pdf", "meme")
