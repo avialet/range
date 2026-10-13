@@ -75,11 +75,12 @@ public struct Rule: Codable, Equatable, Sendable, Identifiable {
 /// Voisinage d'un fichier dans le dossier surveille, pour les conditions speciales.
 public struct RuleNeighbourhood: Sendable {
     public var names: Set<String>
-    public var directories: Set<String>
+    /// Dossiers du premier niveau, par nom.
+    public var directories: [String: FileFacts]
     public var folder: String
     public var probe: any FileProbe
 
-    public init(names: Set<String>, directories: Set<String>, folder: String, probe: any FileProbe) {
+    public init(names: Set<String>, directories: [String: FileFacts], folder: String, probe: any FileProbe) {
         self.names = names
         self.directories = directories
         self.folder = folder
@@ -88,6 +89,22 @@ public struct RuleNeighbourhood: Sendable {
 }
 
 extension Rule {
+    /// Archives dont le Finder cree un dossier du meme nom en les ouvrant.
+    public static let openableArchiveExtensions: Set<String> = ["zip", "7z", "rar", "tar.gz", "tgz"]
+
+    /// `X.zip` et le dossier `X` a cote : non vide, arrive apres l'archive, et (pour un zip) contenant
+    /// une bonne part de ses entrees. Un zip illisible n'est pas une archive ouverte.
+    static func isOpenedArchive(_ f: FileFacts, in hood: RuleNeighbourhood) -> Bool {
+        guard !f.isDirectory else { return false }
+        let (base, ext) = NameNormalizer.split(f.name)
+        let lower = ext.lowercased()
+        guard openableArchiveExtensions.contains(lower), let folder = hood.directories[base],
+              folder.added >= f.added, !hood.probe.isEmptyDirectory(folder.path) else { return false }
+        let check = hood.probe.archiveMatches(f.path, folder: folder.path)
+        if lower == "zip" { return check == true }
+        return check != false
+    }
+
     /// La regle s'applique-t-elle (age mis a part) ?
     public func matches(_ f: FileFacts, in hood: RuleNeighbourhood) -> Bool {
         let c = condition
@@ -113,8 +130,7 @@ extension Rule {
                   hood.names.contains(original) else { return false }
             return hood.probe.identical(f.path, FilePath.join(hood.folder, original))
         case .openedArchive?:
-            guard f.kind == .archive, !f.isDirectory else { return false }
-            return hood.directories.contains(NameNormalizer.split(f.name).base)
+            return Self.isOpenedArchive(f, in: hood)
         case .invoice?:
             return InvoiceHeuristic.matches(name: f.name, sources: f.sources)
         case .screenshot?:

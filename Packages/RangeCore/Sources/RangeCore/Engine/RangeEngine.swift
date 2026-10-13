@@ -26,7 +26,7 @@ public actor RangeEngine {
     let trasher: any Trasher
     let mounted: @Sendable () -> Set<String>?
     let reader = FactsReader()
-    let probe: any FileProbe = DiskProbe()
+    let probe: any FileProbe = CachingProbe()
     private var tracker = StabilityTracker()
     private let cancelFlag = Flag()
     /// Dates d'arrivee imposees par nom (essais sur un clone, captures) : un clone arrive « maintenant ».

@@ -69,6 +69,43 @@ let readerTests: (String, [Test]) = ("Reader", [
             }
         }
     },
+    Test("probeChecksZipAgainstFolder") {
+        try withTemporaryDirectory { dir in
+            let src = dir.appendingPathComponent("src")
+            try makeFile(src, "Photos/a.txt", "a")
+            try makeFile(src, "Photos/sous/b.txt", "b")
+            let zip = dir.appendingPathComponent("Photos.zip")
+            try zipFolder(src.appendingPathComponent("Photos"), to: zip)
+            let folder = dir.appendingPathComponent("Photos")
+            try FileManager.default.copyItem(at: src.appendingPathComponent("Photos"), to: folder)
+            let probe = DiskProbe()
+            expectEqual(probe.archiveMatches(zip.path, folder: folder.path), true)
+            let other = dir.appendingPathComponent("Autre")
+            try makeFile(other, "z.txt")
+            expectEqual(probe.archiveMatches(zip.path, folder: other.path), false)
+            try makeFile(dir, "faux.zip", "pas un zip")
+            expect(probe.archiveMatches(dir.path + "/faux.zip", folder: folder.path) == nil, "zip illisible")
+            expect(probe.archiveMatches(dir.path + "/x.7z", folder: folder.path) == nil, "7z non verifie")
+            expect(!probe.isEmptyDirectory(folder.path))
+            let empty = dir.appendingPathComponent("Vide")
+            try makeFile(empty, ".DS_Store")
+            expect(probe.isEmptyDirectory(empty.path), ".DS_Store seul = vide")
+        }
+    },
+    Test("cachingProbeRereadsOnlyChangedFiles") {
+        try withTemporaryDirectory { dir in
+            let a = try makeFile(dir, "a.pdf", "meme")
+            let b = try makeFile(dir, "b.pdf", "meme")
+            let counting = CountingProbe()
+            let probe = CachingProbe(base: counting)
+            expect(probe.identical(a.path, b.path))
+            expect(probe.identical(b.path, a.path))
+            expectEqual(counting.calls, 1, "deuxieme reponse en cache")
+            try Data("autre".utf8).write(to: b)
+            expect(!probe.identical(a.path, b.path))
+            expectEqual(counting.calls, 2, "fichier change : relu")
+        }
+    },
     Test("probeComparesBytes") {
         try withTemporaryDirectory { dir in
             let a = try makeFile(dir, "a.pdf", String(repeating: "x", count: 3_000_000))
@@ -86,3 +123,13 @@ let readerTests: (String, [Test]) = ("Reader", [
         }
     },
 ])
+
+/// Sonde reelle qui compte ses comparaisons.
+final class CountingProbe: FileProbe, @unchecked Sendable {
+    var calls = 0
+    let disk = DiskProbe()
+    func exists(_ path: String) -> Bool { disk.exists(path) }
+    func identical(_ a: String, _ b: String) -> Bool { calls += 1; return disk.identical(a, b) }
+    func isEmptyDirectory(_ path: String) -> Bool { disk.isEmptyDirectory(path) }
+    func archiveMatches(_ archive: String, folder: String) -> Bool? { disk.archiveMatches(archive, folder: folder) }
+}

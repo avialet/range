@@ -5,6 +5,12 @@ import RangeCore
 struct FakeProbe: FileProbe {
     var existing: Set<String> = []
     var identicalPairs: Set<[String]> = []
+    var emptyDirectories: Set<String> = []
+    /// Resultat de la verification du contenu d'une archive (par chemin) ; absent : `archiveDefault`.
+    var archiveResults: [String: Bool?] = [:]
+    var archiveDefault: Bool? = true
+    func isEmptyDirectory(_ path: String) -> Bool { emptyDirectories.contains(path) }
+    func archiveMatches(_ archive: String, folder: String) -> Bool? { archiveResults[archive] ?? archiveDefault }
     func exists(_ path: String) -> Bool { existing.contains(path) }
     func identical(_ a: String, _ b: String) -> Bool {
         identicalPairs.contains([a, b]) || identicalPairs.contains([b, a])
@@ -60,9 +66,30 @@ let plannerTests: (String, [Test]) = ("Planner", [
         expect(p.actions.first { $0.facts.name == "devis (1).pdf" }?.ruleId != "duplicates", "contenu different")
     },
     Test("openedArchivesNeedTheirFolder") {
-        let p = plan([old("Photos.zip", days: 4), old("Photos", directory: true), old("Seule.zip", days: 4)])
+        let p = plan([old("Photos.zip", days: 4), old("Photos", days: 3, directory: true), old("Seule.zip", days: 4)])
         expectEqual(p.actions.first { $0.facts.name == "Photos.zip" }?.ruleId, "opened-archives")
         expect(p.actions.first { $0.facts.name == "Seule.zip" }?.ruleId != "opened-archives")
+    },
+    Test("openedArchiveNeedsAFullerYoungerMatchingFolder") {
+        func rule(_ facts: [FileFacts], probe: FakeProbe = FakeProbe()) -> String? {
+            plan(facts, probe: probe).actions.first { $0.facts.name.hasPrefix("Photos.") }?.ruleId
+        }
+        let folder = old("Photos", days: 3, directory: true)
+        expectEqual(rule([old("Photos.tar.gz", days: 4), folder]), "opened-archives")
+        expectEqual(rule([old("Photos.tgz", days: 4), folder]), "opened-archives")
+        expectEqual(rule([old("Photos.7z", days: 4), folder]), "opened-archives")
+        expect(rule([old("Photos.dmg", days: 4), folder]) != "opened-archives", "pas une archive de la liste")
+        expect(rule([old("Photos.gz", days: 4), folder]) != "opened-archives", "gz seul : pas de dossier attendu")
+        expect(rule([old("Photos.zip", days: 4), old("Photos", days: 5, directory: true)]) != "opened-archives",
+               "dossier plus ancien que l'archive")
+        expect(rule([old("Photos.zip", days: 4), folder], probe: FakeProbe(emptyDirectories: ["/dl/Photos"])) != "opened-archives",
+               "dossier vide")
+        expect(rule([old("Photos.zip", days: 4), folder], probe: FakeProbe(archiveDefault: false)) != "opened-archives",
+               "contenu different")
+        expect(rule([old("Photos.zip", days: 4), folder], probe: FakeProbe(archiveDefault: nil)) != "opened-archives",
+               "zip illisible : prudence")
+        expectEqual(rule([old("Photos.7z", days: 4), folder], probe: FakeProbe(archiveDefault: nil)), "opened-archives",
+                    "7z : contenu non verifiable, dossier non vide et plus recent suffisent")
     },
     Test("invoicesMoveByYear") {
         let f = old("Facture 2026-031.pdf", days: 20)

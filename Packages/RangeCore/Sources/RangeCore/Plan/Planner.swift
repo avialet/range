@@ -91,7 +91,8 @@ public struct PlanContext: Sendable {
 public enum Planner {
     public static func plan(_ facts: [FileFacts], rules: [Rule], context: PlanContext, probe: any FileProbe) -> Plan {
         let names = Set(facts.map(\.name))
-        let hood = RuleNeighbourhood(names: names, directories: Set(facts.filter(\.isDirectory).map(\.name)),
+        let hood = RuleNeighbourhood(names: names,
+                                     directories: Dictionary(facts.filter(\.isDirectory).map { ($0.name, $0) }, uniquingKeysWith: { a, _ in a }),
                                      folder: context.folder, probe: probe)
         let watched = context.folder
         let order = Dictionary(rules.enumerated().map { ($1.id, $0) }, uniquingKeysWith: { a, _ in a })

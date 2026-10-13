@@ -53,11 +53,15 @@ let undoTests: (String, [Test]) = ("Undo", [
         try withTemporaryDirectory { dir in
             let bench = try Bench(dir)
             for (name, text) in [("Facture 3.pdf", "f"), ("photo.jpg", "p"), ("App.dmg", "d"), ("film.mov", "m"),
-                                 ("Photos.zip", "z"), ("rapport.pdf", "r"), ("rapport (1).pdf", "r"),
+                                 ("rapport.pdf", "r"), ("rapport (1).pdf", "r"),
                                  ("Capture d\u{2019}\u{00E9}cran 2026-10-01 \u{00E0} 10.00.00.png", "c")] {
                 try makeFile(bench.downloads, name, text)
             }
-            try FileManager.default.createDirectory(at: bench.downloads.appendingPathComponent("Photos"), withIntermediateDirectories: true)
+            // Une vraie archive, puis son dossier decompresse a cote (plus recent).
+            let src = dir.appendingPathComponent("src")
+            try makeFile(src, "Photos/a.txt", "a")
+            try zipFolder(src.appendingPathComponent("Photos"), to: bench.downloads.appendingPathComponent("Photos.zip"))
+            try FileManager.default.copyItem(at: src.appendingPathComponent("Photos"), to: bench.downloads.appendingPathComponent("Photos"))
             try makeFile(bench.home.appendingPathComponent("Pictures"), "deja.jpg", "existant")
             let before = snapshotTree(bench.root)
             let result = bench.executor.apply(try bench.plan(rules: ageless).ready, trigger: .initial, now: Date())
