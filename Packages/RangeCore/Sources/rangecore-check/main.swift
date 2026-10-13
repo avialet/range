@@ -8,4 +8,5 @@ run([
     plannerTests,
     applyTests,
     undoTests,
+    engineTests,
 ])
