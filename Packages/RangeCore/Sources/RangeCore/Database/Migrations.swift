@@ -15,12 +15,43 @@ enum Migrations {
                 t.primaryKey("key", .text)
                 t.column("value", .text).notNull()
             }
-            // Tables de l'app : a ajouter ici, par exemple
-            // try db.create(table: "item") { t in
-            //     t.autoIncrementedPrimaryKey("id")
-            //     t.column("createdAt", .datetime).notNull()
-            //     t.column("title", .text).notNull()
-            // }
+            // Lots : une passe ou un clic « Ranger » = un lot, defait d'un coup.
+            try db.create(table: "batch") { t in
+                t.autoIncrementedPrimaryKey("id")
+                t.column("date", .datetime).notNull()
+                t.column("trigger", .text).notNull()
+                t.column("undoneAt", .datetime)
+            }
+            // Un fichier range : d'ou il vient, ou il est, de quoi verifier que c'est bien lui.
+            try db.create(table: "move") { t in
+                t.autoIncrementedPrimaryKey("id")
+                t.belongsTo("batch", onDelete: .cascade).notNull()
+                t.column("date", .datetime).notNull()
+                t.column("source", .text).notNull()
+                t.column("destination", .text).notNull()
+                t.column("kind", .text).notNull()
+                t.column("ruleId", .text).notNull()
+                t.column("reason", .text)
+                t.column("inode", .integer).notNull()
+                t.column("size", .integer).notNull()
+                t.column("isDirectory", .boolean).notNull()
+                t.column("createdDirs", .text).notNull()
+                t.column("undoneAt", .datetime)
+                t.column("restoredTo", .text)
+            }
+            try db.create(index: "move_on_date", on: "move", columns: ["date"])
+            // Regles de l'utilisateur, dans l'ordre (JSON de `Rule`).
+            try db.create(table: "rule") { t in
+                t.primaryKey("id", .text)
+                t.column("position", .integer).notNull()
+                t.column("json", .text).notNull()
+            }
+            // Fichiers remis en place a la main : Range les laisse tranquilles.
+            try db.create(table: "held") { t in
+                t.primaryKey("inode", .integer)
+                t.column("path", .text).notNull()
+                t.column("date", .datetime).notNull()
+            }
         }
 
         return m

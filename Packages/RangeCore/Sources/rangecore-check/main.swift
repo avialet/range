@@ -6,4 +6,6 @@ run([
     readerTests,
     ruleTests,
     plannerTests,
+    applyTests,
+    undoTests,
 ])
