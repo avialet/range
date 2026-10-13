@@ -9,4 +9,5 @@ run([
     applyTests,
     undoTests,
     engineTests,
+    recoveryTests,
 ])

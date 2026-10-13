@@ -3,11 +3,17 @@ import Foundation
 /// Mise a la corbeille : jamais de suppression. Renvoie l'emplacement dans la corbeille.
 public protocol Trasher: Sendable {
     func trash(_ path: String) throws -> String
+    /// Ou chercher un fichier jete dont la ligne est restee `pending` (voir `Recovery`).
+    var searchFolders: [String] { get }
 }
 
 /// La vraie corbeille du Finder (`FileManager.trashItem`), restaurable par « Remettre » aussi.
 public struct SystemTrasher: Trasher {
     public init() {}
+
+    public var searchFolders: [String] {
+        FileManager.default.urls(for: .trashDirectory, in: .userDomainMask).map(\.path)
+    }
 
     public func trash(_ path: String) throws -> String {
         var result: NSURL?
@@ -24,6 +30,8 @@ public struct FolderTrasher: Trasher {
     public init(folder: String) {
         self.folder = folder
     }
+
+    public var searchFolders: [String] { [folder] }
 
     public func trash(_ path: String) throws -> String {
         if !FileOps.exists(folder) { try FileManager.default.createDirectory(atPath: folder, withIntermediateDirectories: true) }

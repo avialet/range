@@ -157,14 +157,23 @@ final class RangeController {
         let last = UserDefaults.standard.string(forKey: Keys.lastVersion)
         if initialDone, let last, last != version { updateCheckPending = true }
         store(version, Keys.lastVersion)
-        Task { rules = await engine.rules }
+        Task {
+            // Journal d'abord : operations interrompues par un arret brutal, avant toute passe.
+            do {
+                _ = try await engine.recover()
+            } catch {
+                NSLog("Range : reprise du journal impossible : \(error)")
+            }
+            rules = await engine.rules
+            reloadJournal()
+            // Premier lancement : rien n'est lu avant le clic sur "Autoriser" de la carte d'accueil.
+            if initialDone || UserDefaults.standard.bool(forKey: Brand.key("AccessAsked")) { scan() }
+        }
         watcher = FolderWatcher { [weak self] in self?.scan() }
         NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { _ in
             MainActor.assumeIsolated { RangeController.shared.scan() }
         }
         applyHotKey()
-        // Premier lancement : rien n'est lu avant le clic sur « Autoriser » de la carte d'accueil.
-        if initialDone || UserDefaults.standard.bool(forKey: Brand.key("AccessAsked")) { scan() }
     }
 
     /// Bouton « Autoriser » : lit Telechargements (invite de macOS), puis Documents si une regle y range.
@@ -279,6 +288,7 @@ final class RangeController {
         case .vanished: "Un fichier a disparu entre-temps."
         case .denied: "Acc\u{00E8}s refus\u{00E9} \u{00E0} un dossier de destination."
         case .otherVolume: "Destination sur un autre disque : non prise en charge."
+        case .journal: "Journal illisible : rien n\u{2019}a \u{00E9}t\u{00E9} d\u{00E9}plac\u{00E9}."
         case .failed(let message): message
         }
     }

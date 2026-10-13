@@ -22,6 +22,12 @@ public enum MoveKind: String, Codable, Sendable {
     case move, trash
 }
 
+/// Une ligne est ecrite `pending` avant le deplacement, puis passe `done` avec le chemin reel.
+/// Au lancement, `Recovery` regle le sort des `pending` laissees par un arret brutal.
+public enum MoveState: String, Codable, Sendable {
+    case pending, done
+}
+
 public struct BatchRecord: Codable, Sendable, Equatable, Identifiable, FetchableRecord, MutablePersistableRecord {
     public static let databaseTableName = "batch"
     public var id: Int64?
@@ -52,6 +58,9 @@ public struct MoveRecord: Codable, Sendable, Equatable, Identifiable, FetchableR
     public var undoneAt: Date?
     /// Emplacement de retour (le nom d'origine ou une variante).
     public var restoredTo: String?
+    public var state: MoveState = .done
+    /// Pourquoi la derniere tentative d'annulation a echoue.
+    public var undoError: String?
 
     public init(batchId: Int64, date: Date, source: String, destination: String, kind: MoveKind, ruleId: String,
                 reason: String? = nil, inode: Int64, size: Int64, isDirectory: Bool, createdDirs: [String] = []) {
@@ -95,11 +104,33 @@ public struct Journal: Sendable {
         }
     }
 
-    public func record(_ move: MoveRecord) throws -> MoveRecord {
+    /// Ligne `pending`, ecrite AVANT de toucher au fichier.
+    public func beginMove(_ move: MoveRecord) throws -> MoveRecord {
         try database.write { db in
             var m = move
+            m.state = .pending
             try m.insert(db)
             return m
+        }
+    }
+
+    /// L'operation a eu lieu : chemin reel, ligne `done`.
+    public func complete(moveId: Int64, destination: String) throws {
+        try database.write { db in
+            try db.execute(sql: "UPDATE move SET state = 'done', destination = ? WHERE id = ?", arguments: [destination, moveId])
+        }
+    }
+
+    /// L'operation n'a pas eu lieu : la ligne disparait.
+    public func discard(moveId: Int64) throws {
+        try database.write { db in
+            _ = try MoveRecord.deleteOne(db, key: moveId)
+        }
+    }
+
+    public func pendingMoves() throws -> [MoveRecord] {
+        try database.read { db in
+            try MoveRecord.filter(Column("state") == MoveState.pending.rawValue).order(Column("id")).fetchAll(db)
         }
     }
 
@@ -110,12 +141,20 @@ public struct Journal: Sendable {
         }
     }
 
+    /// Retire les lots sans aucune ligne.
+    public func deleteEmptyBatches() throws {
+        try database.write { db in
+            try db.execute(sql: "DELETE FROM batch WHERE id NOT IN (SELECT DISTINCT batchId FROM move)")
+        }
+    }
+
     /// Lots du plus recent au plus ancien, avec leurs fichiers dans l'ordre d'application.
     public func batches(limit: Int = 300) throws -> [BatchSummary] {
         try database.read { db in
             let batches = try BatchRecord.order(Column("date").desc, Column("id").desc).limit(limit).fetchAll(db)
             let ids = batches.compactMap(\.id)
-            let moves = try MoveRecord.filter(ids.contains(Column("batchId"))).order(Column("id")).fetchAll(db)
+            let moves = try MoveRecord.filter(ids.contains(Column("batchId")) && Column("state") == MoveState.done.rawValue)
+                .order(Column("id")).fetchAll(db)
             let grouped = Dictionary(grouping: moves, by: \.batchId)
             return batches.map { BatchSummary(batch: $0, moves: grouped[$0.id ?? 0] ?? []) }
         }
@@ -124,7 +163,8 @@ public struct Journal: Sendable {
     public func batch(_ id: Int64) throws -> BatchSummary? {
         try database.read { db in
             guard let batch = try BatchRecord.fetchOne(db, key: id) else { return nil }
-            let moves = try MoveRecord.filter(Column("batchId") == id).order(Column("id")).fetchAll(db)
+            let moves = try MoveRecord.filter(Column("batchId") == id && Column("state") == MoveState.done.rawValue)
+                .order(Column("id")).fetchAll(db)
             return BatchSummary(batch: batch, moves: moves)
         }
     }
@@ -141,6 +181,12 @@ public struct Journal: Sendable {
         }
     }
 
+    public func setUndoError(moveId: Int64, _ message: String?) throws {
+        try database.write { db in
+            try db.execute(sql: "UPDATE move SET undoError = ? WHERE id = ?", arguments: [message, moveId])
+        }
+    }
+
     public func markBatchUndone(_ id: Int64, at date: Date) throws {
         try database.write { db in
             try db.execute(sql: "UPDATE batch SET undoneAt = ? WHERE id = ?", arguments: [date, id])
@@ -150,7 +196,8 @@ public struct Journal: Sendable {
     /// Fichiers ranges (et pas remis) depuis une date.
     public func movedCount(since date: Date) throws -> Int {
         try database.read { db in
-            try MoveRecord.filter(Column("date") >= date && Column("undoneAt") == nil).fetchCount(db)
+            try MoveRecord.filter(Column("date") >= date && Column("undoneAt") == nil
+                                  && Column("state") == MoveState.done.rawValue).fetchCount(db)
         }
     }
 

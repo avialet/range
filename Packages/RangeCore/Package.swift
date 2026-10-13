@@ -27,7 +27,7 @@ let package = Package(
         // les Command Line Tools (voir docs/tests.md).
         .executableTarget(
             name: "rangecore-check",
-            dependencies: ["RangeCore"]
+            dependencies: ["RangeCore", .product(name: "GRDB", package: "GRDB.swift")]
         ),
         // Essai en ligne de commande sur un dossier jetable (clone de Telechargements) :
         // apercu, rangement et annulation complete, sans l'app.

@@ -89,6 +89,11 @@ public actor RangeEngine {
         cancelFlag.set(true)
     }
 
+    /// Au lancement, avant toute passe : regle les lignes `pending` d'un arret brutal.
+    public func recover() throws -> RecoveryReport {
+        try Recovery(journal: journal, trashFolders: trasher.searchFolders).reconcile()
+    }
+
     public func undoBatch(_ id: Int64, now: Date) -> UndoResult {
         Undoer(journal: journal).undoBatch(id, now: now)
     }

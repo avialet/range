@@ -54,6 +54,14 @@ enum Migrations {
             }
         }
 
+        // v2 : journal ecrit avant d'agir (etat `pending` puis `done`), raison d'un echec d'annulation.
+        m.registerMigration("v2") { db in
+            try db.alter(table: "move") { t in
+                t.add(column: "state", .text).notNull().defaults(to: "done")
+                t.add(column: "undoError", .text)
+            }
+        }
+
         return m
     }
 }

@@ -10,6 +10,8 @@ public enum ApplyFailure: Error, Equatable, Sendable {
     case denied
     /// Destination sur un autre volume : refuse en 0.1 (copie puis effacement).
     case otherVolume
+    /// Le journal ne s'ecrit pas : rien n'est touche sans trace.
+    case journal
     case failed(String)
 }
 
@@ -23,11 +25,15 @@ public struct ApplyResult: Sendable, Equatable {
     public var batchId: Int64?
     public var moves: [MoveRecord]
     public var failures: [ApplyFailureItem]
+    /// Operations faites mais restees `pending` au journal (reglees par `Recovery` au prochain lancement).
+    public var journalErrors = 0
 }
 
-/// Applique les actions pretes d'un plan, fichier par fichier, et les inscrit au journal.
-/// Chaque fichier est reverifie juste avant (meme inode, meme taille, meme date) ; rien n'est jamais
-/// ecrase (renommage `RENAME_EXCL`) ; la corbeille seulement ; jamais vers un autre volume.
+/// Applique les actions pretes d'un plan, fichier par fichier, et les inscrit au journal AVANT d'agir :
+/// ligne `pending` (source, destination prevue, inode, taille, dossiers a creer), puis l'operation, puis
+/// `done` avec le chemin reel. Sans ligne ecrite, rien n'est touche. Chaque fichier est reverifie juste
+/// avant (meme inode, meme taille, meme date) ; rien n'est jamais ecrase (renommage `RENAME_EXCL`) ;
+/// la corbeille seulement ; jamais vers un autre volume.
 public struct Executor: Sendable {
     let journal: Journal
     let trasher: any Trasher
@@ -45,74 +51,109 @@ public struct Executor: Sendable {
                       shouldContinue: @Sendable () -> Bool = { true }) -> ApplyResult {
         var result = ApplyResult(batchId: nil, moves: [], failures: [])
         let ready = actions.filter(\.isReady)
-        guard !ready.isEmpty, let batchId = try? journal.begin(trigger: trigger, date: now) else { return result }
+        guard !ready.isEmpty else { return result }
+        let batchId: Int64
+        do {
+            batchId = try journal.begin(trigger: trigger, date: now)
+        } catch {
+            result.failures = ready.map { ApplyFailureItem(path: $0.facts.path, reason: .journal) }
+            return result
+        }
         for action in ready {
             guard shouldContinue() else { break }
-            switch perform(action, batchId: batchId, now: now) {
-            case .success(let move):
-                if let saved = try? journal.record(move) { result.moves.append(saved) } else { result.moves.append(move) }
-            case .failure(let reason):
-                result.failures.append(ApplyFailureItem(path: action.facts.path, reason: reason))
+            switch perform(action, batchId: batchId, now: now, journalErrors: &result.journalErrors) {
+            case .success(let move): result.moves.append(move)
+            case .failure(let reason): result.failures.append(ApplyFailureItem(path: action.facts.path, reason: reason))
             }
         }
         if result.moves.isEmpty {
-            try? journal.deleteBatchIfEmpty(batchId)
+            do { try journal.deleteBatchIfEmpty(batchId) } catch { result.journalErrors += 1 }
         } else {
             result.batchId = batchId
         }
         return result
     }
 
-    private func perform(_ action: PlannedAction, batchId: Int64, now: Date) -> Result<MoveRecord, ApplyFailure> {
+    private func perform(_ action: PlannedAction, batchId: Int64, now: Date, journalErrors: inout Int) -> Result<MoveRecord, ApplyFailure> {
         let planned = action.facts
         guard let current = reader.facts(atPath: planned.path) else { return .failure(.vanished) }
         guard current.signature == planned.signature else { return .failure(.changed) }
-        func record(_ destination: String, _ kind: MoveKind, reason: TrashReason? = nil, created: [String] = []) -> MoveRecord {
-            MoveRecord(batchId: batchId, date: now, source: planned.path, destination: destination, kind: kind,
-                       ruleId: action.ruleId, reason: reason?.rawValue, inode: Int64(bitPattern: current.inode),
-                       size: current.size, isDirectory: current.isDirectory, createdDirs: created)
-        }
+
+        // 1. Ce qui va etre fait.
+        var kind = MoveKind.trash
+        var reason: TrashReason?
+        var target = ""
+        var missing: [String] = []
         switch action.operation {
-        case .trash(let reason):
-            do {
-                return .success(record(try trasher.trash(planned.path), .trash, reason: reason))
-            } catch {
-                return .failure(Self.failure(error))
-            }
-        case .move(let target):
-            let folder = FilePath.parent(target)
+        case .trash(let r):
+            reason = r
+        case .move(let planTarget):
+            let folder = FilePath.parent(planTarget)
             guard Self.sameVolume(planned.path, folder) else { return .failure(.otherVolume) }
-            var created: [String] = []
-            do {
-                created = try Self.createFolders(folder)
-                // Un nom pris entre l'apercu et maintenant : variante, ou corbeille si c'est le meme contenu.
-                var reserved: Set<String> = []
-                switch Planner.resolve(current, in: folder, probe: probe, reserved: &reserved) {
-                case .move(let path):
-                    try FileOps.renameExclusive(planned.path, path)
-                    return .success(record(path, .move, created: created))
-                case .trash(let reason):
-                    Self.removeEmpty(created)
-                    return .success(record(try trasher.trash(planned.path), .trash, reason: reason))
-                }
-            } catch {
-                Self.removeEmpty(created)
-                return .failure(Self.failure(error))
+            missing = Self.missingFolders(folder)
+            // Un nom pris entre l'apercu et maintenant : variante, ou corbeille si c'est le meme contenu.
+            var reserved: Set<String> = []
+            switch Planner.resolve(current, in: folder, probe: probe, reserved: &reserved) {
+            case .move(let path):
+                kind = .move
+                target = path
+            case .trash(let r):
+                reason = r
+                missing = []
             }
         }
+
+        // 2. Le journal d'abord.
+        let pending: MoveRecord
+        do {
+            pending = try journal.beginMove(MoveRecord(batchId: batchId, date: now, source: planned.path, destination: target,
+                                                       kind: kind, ruleId: action.ruleId, reason: reason?.rawValue,
+                                                       inode: Int64(bitPattern: current.inode), size: current.size,
+                                                       isDirectory: current.isDirectory, createdDirs: missing))
+        } catch {
+            return .failure(.journal)
+        }
+        guard let id = pending.id else { return .failure(.journal) }
+
+        // 3. L'operation.
+        var final = target
+        do {
+            if kind == .move {
+                try Self.createFolders(missing)
+                try FileOps.renameExclusive(planned.path, target)
+            } else {
+                final = try trasher.trash(planned.path)
+            }
+        } catch {
+            Self.removeEmpty(missing)
+            do { try journal.discard(moveId: id) } catch { journalErrors += 1 }
+            return .failure(Self.failure(error))
+        }
+
+        // 4. Fait : chemin reel.
+        var done = pending
+        done.state = .done
+        done.destination = final
+        do { try journal.complete(moveId: id, destination: final) } catch { journalErrors += 1 }
+        return .success(done)
     }
 
-    /// Cree les dossiers manquants, du plus haut au plus profond ; renvoie ceux qui ont ete crees.
-    static func createFolders(_ folder: String) throws -> [String] {
+    /// Dossiers a creer pour atteindre `folder`, du plus haut au plus profond.
+    static func missingFolders(_ folder: String) -> [String] {
         var missing: [String] = []
         var cursor = folder
         while !FileOps.exists(cursor), cursor != "/" {
             missing.insert(cursor, at: 0)
             cursor = FilePath.parent(cursor)
         }
+        return missing
+    }
+
+    /// Cree les dossiers donnes, dans l'ordre ; en cas d'echec, retire ceux deja crees.
+    static func createFolders(_ folders: [String]) throws {
         var created: [String] = []
         do {
-            for path in missing {
+            for path in folders {
                 try FileOps.makeDirectory(path)
                 created.append(path)
             }
@@ -120,7 +161,6 @@ public struct Executor: Sendable {
             removeEmpty(created)
             throw error
         }
-        return created
     }
 
     /// Retire les dossiers crees par Range s'ils sont vides (un `.DS_Store` du Finder ne compte pas),
