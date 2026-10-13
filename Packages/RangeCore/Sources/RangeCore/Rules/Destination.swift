@@ -38,7 +38,7 @@ public enum Destination {
         "Desktop": "Bureau", "Downloads": "T\u{00E9}l\u{00E9}chargements",
     ]
 
-    /// `~/Pictures/Captures` -> « Images › Captures » (« , par mois » avec le sous-dossier).
+    /// `~/Pictures/Captures` -> " Images > Captures " (" , par mois " avec le sous-dossier).
     public static func display(_ destination: String, subfolder: Subfolder = .none) -> String {
         var parts: [String]
         if destination.hasPrefix("~/") {

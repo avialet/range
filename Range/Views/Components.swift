@@ -99,7 +99,7 @@ enum Format {
         return f.string(fromByteCount: bytes)
     }
 
-    /// « il y a 9 j », « il y a 3 h ».
+    /// " il y a 9 j ", " il y a 3 h ".
     static func age(_ date: Date, now: Date = Date()) -> String {
         let s = max(0, now.timeIntervalSince(date))
         if s < 3600 { return "il y a \(max(1, Int(s / 60)))\u{00A0}min" }
@@ -107,7 +107,7 @@ enum Format {
         return "il y a \(Int(s / 86400))\u{00A0}j"
     }
 
-    /// « dans 7 min », « dans 3 j ».
+    /// " dans 7 min ", " dans 3 j ".
     static func countdown(_ date: Date, now: Date = Date()) -> String {
         let s = max(0, date.timeIntervalSince(now))
         if s < 60 { return "dans un instant" }
@@ -126,13 +126,13 @@ enum Format {
 
     static func files(_ n: Int) -> String { "\(n)\u{00A0}fichier\(n > 1 ? "s" : "")" }
 
-    /// Dossier de destination lisible : « Images › Téléchargées › 2026-10 ».
+    /// Dossier de destination lisible : " Images > Telechargees > 2026-10 ".
     static func folder(of path: String, home: String) -> String {
         Destination.display(Destination.abbreviate(FilePath.parent(path), home: home))
     }
 }
 
-/// « 5 fichiers rangés · Annuler », quelques secondes en bas de la fenetre.
+/// " 5 fichiers ranges - Annuler ", quelques secondes en bas de la fenetre.
 struct ToastView: View {
     @Environment(RangeController.self) private var controller
     let toast: Toast

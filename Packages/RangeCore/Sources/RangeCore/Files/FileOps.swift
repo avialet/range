@@ -2,7 +2,7 @@ import Darwin
 import Foundation
 
 /// Chemins en chaines, octets gardes tels quels. `URL(fileURLWithPath:)` et `appendingPathComponent`
-/// decomposent les accents (« é » devient « e » + accent) : un fichier remis en place doit retrouver
+/// decomposent les accents (" e " devient " e " + accent) : un fichier remis en place doit retrouver
 /// exactement son nom, donc tout ce qui cree un nom sur le disque passe par ici.
 public enum FilePath {
     public static func join(_ directory: String, _ name: String) -> String {

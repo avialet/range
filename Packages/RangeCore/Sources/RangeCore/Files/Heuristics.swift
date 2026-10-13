@@ -1,6 +1,6 @@
 import Foundation
 
-/// Captures d'ecran de macOS : « Capture d'ecran 2026-10-14 a 09.41.12 », « Screenshot 2026-... at ... ».
+/// Captures d'ecran de macOS : " Capture d'ecran 2026-10-14 a 09.41.12 ", " Screenshot 2026-... at ... ".
 public enum ScreenshotName {
     public static func matches(_ name: String) -> Bool {
         let folded = NameNormalizer.fold(name).replacingOccurrences(of: "\u{2019}", with: "'")
@@ -24,7 +24,7 @@ public enum InvoiceHeuristic {
     public static let nameWords: Set<String> = [
         "facture", "invoice", "receipt", "recu", "quittance", "billing", "stripe", "paddle", "factura", "rechnung",
     ]
-    /// Mots faibles : seulement avec un numero dans le nom (« Avoir 12 », pas « A avoir lu »).
+    /// Mots faibles : seulement avec un numero dans le nom (" Avoir 12 ", pas " A avoir lu ").
     public static let numberedWords: Set<String> = ["avoir", "bill"]
     /// Fragments de l'adresse d'origine.
     public static let sourceFragments: [String] = [
@@ -38,7 +38,7 @@ public enum InvoiceHeuristic {
             let singular = token.hasSuffix("s") ? String(token.dropLast()) : token
             if nameWords.contains(token) || nameWords.contains(singular) { return true }
             if hasNumber, numberedWords.contains(token) || numberedWords.contains(singular) {
-                // « Bill of materials » n'a pas de numero ; « bill 2026-03 » oui.
+                // " Bill of materials " n'a pas de numero ; " bill 2026-03 " oui.
                 return true
             }
         }
@@ -49,7 +49,7 @@ public enum InvoiceHeuristic {
         return false
     }
 
-    /// Mots replies, coupes aussi entre lettres et chiffres (« facture2026 » -> facture, 2026).
+    /// Mots replies, coupes aussi entre lettres et chiffres (" facture2026 " -> facture, 2026).
     static func tokens(_ text: String) -> [String] {
         var tokens: [String] = []
         var current = ""

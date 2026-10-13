@@ -34,7 +34,7 @@ public enum FileKind: String, Codable, Sendable, CaseIterable {
         return isDirectory ? .folder : .other
     }
 
-    /// Libelle au singulier, en minuscules (« image », « installeur »).
+    /// Libelle au singulier, en minuscules (" image ", " installeur ").
     public var label: String {
         switch self {
         case .folder: "dossier"

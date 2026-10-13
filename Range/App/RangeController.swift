@@ -32,7 +32,7 @@ enum Blocker: Equatable {
     case documentsDenied
 }
 
-/// Message court en bas de la fenetre, avec « Annuler » quand on peut defaire.
+/// Message court en bas de la fenetre, avec " Annuler " quand on peut defaire.
 struct Toast: Equatable {
     var text: String
     var undoBatch: Int64?
@@ -186,7 +186,7 @@ final class RangeController {
         applyHotKey()
     }
 
-    /// Bouton « Autoriser » : lit Telechargements (invite de macOS), puis Documents si une regle y range.
+    /// Bouton " Autoriser " : lit Telechargements (invite de macOS), puis Documents si une regle y range.
     func requestAccess() {
         store(true, Brand.key("AccessAsked"))
         let folder = paths.folder
@@ -312,7 +312,7 @@ final class RangeController {
         }
     }
 
-    /// « Réessayer » apres un refus de Documents.
+    /// " Reessayer " apres un refus de Documents.
     func retryAfterBlocker() {
         blocker = nil
         scan()
@@ -455,7 +455,7 @@ final class RangeController {
 
     // MARK: Etat pour la barre des menus
 
-    /// « Rangé il y a 4 min · en pause ».
+    /// " Range il y a 4 min - en pause ".
     var statusLine: String {
         var parts: [String] = []
         if let date = lastBatchDate {

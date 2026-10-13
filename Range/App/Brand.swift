@@ -30,7 +30,7 @@ extension Updater {
 }
 
 extension HotKeyController {
-    /// Ouvre la fenetre de Range : ⌃⌥⌘R (libre dans le portefeuille), eteint par defaut
+    /// Ouvre la fenetre de Range : ctrl-opt-cmd-R (libre dans le portefeuille), eteint par defaut
     /// (cle `RangeHotKeyEnabled`). La touche R est au meme endroit en AZERTY et en QWERTY.
     static let shared = HotKeyController(defaultsKey: Brand.key("HotKey"), logName: Brand.displayName,
                                          initial: HotKeyShortcut(keyCode: UInt16(kVK_ANSI_R),

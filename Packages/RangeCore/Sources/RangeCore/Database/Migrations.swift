@@ -15,7 +15,7 @@ enum Migrations {
                 t.primaryKey("key", .text)
                 t.column("value", .text).notNull()
             }
-            // Lots : une passe ou un clic « Ranger » = un lot, defait d'un coup.
+            // Lots : une passe ou un clic " Ranger " = un lot, defait d'un coup.
             try db.create(table: "batch") { t in
                 t.autoIncrementedPrimaryKey("id")
                 t.column("date", .datetime).notNull()

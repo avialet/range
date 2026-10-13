@@ -4,7 +4,7 @@ import GRDB
 public enum BatchTrigger: String, Codable, Sendable {
     /// Le premier grand menage, apres l'apercu.
     case initial
-    /// « Ranger N fichiers » depuis l'apercu.
+    /// " Ranger N fichiers " depuis l'apercu.
     case manual
     /// Passe automatique en arriere-plan.
     case automatic

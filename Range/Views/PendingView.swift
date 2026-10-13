@@ -2,7 +2,7 @@ import RangeCore
 import SwiftUI
 import VialetKit
 
-/// À ranger : apercu vivant de la prochaine passe, groupe par regle. Les lignes pretes se decochent ;
+/// A ranger : apercu vivant de la prochaine passe, groupe par regle. Les lignes pretes se decochent ;
 /// celles qui attendent (delai de grace, age, verification, image montee) montrent pourquoi et jusqu'a quand.
 struct PendingView: View {
     @Environment(RangeController.self) private var controller

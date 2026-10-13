@@ -50,7 +50,7 @@ public struct RuleCondition: Codable, Equatable, Sendable {
 public struct Rule: Codable, Equatable, Sendable, Identifiable {
     public var id: String
     public var title: String
-    /// Phrase courte sous le titre (« Images disque et paquets de plus de 7 jours »).
+    /// Phrase courte sous le titre (" Images disque et paquets de plus de 7 jours ").
     public var summary: String
     public var enabled: Bool
     public var condition: RuleCondition

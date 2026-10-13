@@ -16,7 +16,7 @@ public struct FileFacts: Sendable, Equatable, Hashable {
     public var inode: UInt64
     /// Adresses d'origine (`kMDItemWhereFroms`), la page puis le fichier.
     public var sources: [String]
-    /// Agent de la quarantaine (« Safari », « Google Chrome »).
+    /// Agent de la quarantaine (" Safari ", " Google Chrome ").
     public var agent: String?
     public var isScreenCapture: Bool
 
@@ -38,7 +38,7 @@ public struct FileFacts: Sendable, Equatable, Hashable {
     /// Pour lire (icone, attributs) ; jamais pour creer un nom.
     public var url: URL { URL(fileURLWithPath: path) }
 
-    /// Ce qui doit rester identique entre l'aperçu et le deplacement.
+    /// Ce qui doit rester identique entre l'apercu et le deplacement.
     public var signature: FileSignature { FileSignature(inode: inode, size: size, modified: modified) }
 }
 

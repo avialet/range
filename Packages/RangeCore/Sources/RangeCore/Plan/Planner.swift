@@ -15,7 +15,7 @@ public enum PlannedOperation: Equatable, Sendable {
 
 /// Pourquoi une action attend.
 public enum PlanWait: Equatable, Sendable {
-    /// Delai de grace depuis l'arrivee (le lien « Ouvrir » du navigateur marche encore).
+    /// Delai de grace depuis l'arrivee (le lien " Ouvrir " du navigateur marche encore).
     case grace(until: Date)
     /// Age minimal de la regle (installeurs : 7 jours).
     case age(until: Date)
@@ -161,7 +161,7 @@ public enum Planner {
         }
     }
 
-    /// Nom libre a destination : le meme, sinon « nom 2.ext », « nom 3.ext »... ; si le meme contenu
+    /// Nom libre a destination : le meme, sinon " nom 2.ext ", " nom 3.ext "... ; si le meme contenu
     /// y est deja, la copie arrivee va a la corbeille.
     static func resolve(_ f: FileFacts, in folder: String, probe: any FileProbe, reserved: inout Set<String>) -> PlannedOperation {
         let first = FilePath.join(folder, f.name)

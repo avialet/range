@@ -83,7 +83,7 @@ let filesTests: (String, [Test]) = ("Files", [
         expect(!tracker.isStable(f, now: t0.addingTimeInterval(40)), "autre fichier au meme nom")
     },
     Test("namesFoldAccentsAndCase") {
-        expectEqual(NameNormalizer.fold("Reçu Électricité"), "recu electricite")
+        expectEqual(NameNormalizer.fold("Re\u{00E7}u \u{00C9}lectricit\u{00E9}"), "recu electricite")
         expectEqual(NameNormalizer.split("archive.tar.gz").base, "archive")
         expectEqual(NameNormalizer.split("archive.tar.gz").ext, "tar.gz")
         expectEqual(NameNormalizer.split("photo.JPG").ext, "JPG")
