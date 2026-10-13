@@ -8,7 +8,7 @@ public enum FolderAccessError: Error, Equatable, Sendable {
     case missing
     case other(String)
 
-    static func from(_ error: Error) -> FolderAccessError {
+    public static func from(_ error: Error) -> FolderAccessError {
         let ns = error as NSError
         let posix = (ns.userInfo[NSUnderlyingErrorKey] as? NSError).flatMap { $0.domain == NSPOSIXErrorDomain ? $0.code : nil }
             ?? (ns.domain == NSPOSIXErrorDomain ? ns.code : nil)

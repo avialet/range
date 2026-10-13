@@ -38,7 +38,7 @@ public enum Destination {
         "Desktop": "Bureau", "Downloads": "T\u{00E9}l\u{00E9}chargements",
     ]
 
-    /// `~/Pictures/Captures` -> « Images › Captures » (› AAAA ou AAAA-MM avec le sous-dossier).
+    /// `~/Pictures/Captures` -> « Images › Captures » (« , par mois » avec le sous-dossier).
     public static func display(_ destination: String, subfolder: Subfolder = .none) -> String {
         var parts: [String]
         if destination.hasPrefix("~/") {
@@ -47,17 +47,16 @@ public enum Destination {
         } else if destination == "~" {
             parts = ["Dossier personnel"]
         } else {
-            return destination + (subfolder == .none ? "" : " \u{203A} " + subfolderPattern(subfolder))
+            parts = [destination]
         }
-        if subfolder != .none { parts.append(subfolderPattern(subfolder)) }
-        return parts.joined(separator: " \u{203A} ")
+        return parts.joined(separator: " \u{203A} ") + subfolderSuffix(subfolder)
     }
 
-    static func subfolderPattern(_ s: Subfolder) -> String {
+    static func subfolderSuffix(_ s: Subfolder) -> String {
         switch s {
         case .none: ""
-        case .year: "AAAA"
-        case .month: "AAAA-MM"
+        case .year: ", par ann\u{00E9}e"
+        case .month: ", par mois"
         }
     }
 }

@@ -60,6 +60,7 @@ let ruleTests: (String, [Test]) = ("Rules", [
         expectEqual(Destination.display("~/Movies/T\u{00E9}l\u{00E9}charg\u{00E9}es"), "Vid\u{00E9}os \u{203A} T\u{00E9}l\u{00E9}charg\u{00E9}es")
         expectEqual(Destination.display("~/Desktop"), "Bureau")
         expectEqual(Destination.display("/Volumes/Data/X"), "/Volumes/Data/X")
-        expectEqual(Destination.display("~/Documents/Factures", subfolder: .year), "Documents \u{203A} Factures \u{203A} AAAA")
+        expectEqual(Destination.display("~/Documents/Factures", subfolder: .year), "Documents \u{203A} Factures, par ann\u{00E9}e")
+        expectEqual(Destination.display("~/Pictures/Captures", subfolder: .month), "Images \u{203A} Captures, par mois")
     },
 ])

@@ -37,6 +37,10 @@
 	<string>public.app-category.productivity</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>26.0</string>
+	<key>NSDownloadsFolderUsageDescription</key>
+	<string>Range lit le dossier T&#xE9;l&#xE9;chargements pour proposer un rangement, puis range les fichiers selon vos r&#xE8;gles. Rien ne quitte ce Mac.</string>
+	<key>NSDocumentsFolderUsageDescription</key>
+	<string>Range range les factures et les anciens t&#xE9;l&#xE9;chargements dans Documents, selon vos r&#xE8;gles. Rien ne quitte ce Mac.</string>
 	<key>NSHumanReadableCopyright</key>
 	<string>&#xA9; 2026 Aur&#xE9;lien Vialet</string>
 </dict>
