@@ -37,6 +37,8 @@
 	<string>public.app-category.productivity</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>26.0</string>
+	<key>LSMultipleInstancesProhibited</key>
+	<true/>
 	<key>NSDownloadsFolderUsageDescription</key>
 	<string>Range lit le dossier T&#xE9;l&#xE9;chargements pour proposer un rangement, puis range les fichiers selon vos r&#xE8;gles. Rien ne quitte ce Mac.</string>
 	<key>NSDocumentsFolderUsageDescription</key>

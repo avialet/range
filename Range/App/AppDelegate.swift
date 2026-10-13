@@ -9,6 +9,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Mode capture : dossiers jetables, ni surveillance, ni raccourci, ni reseau.
         if runSnapshotIfRequested() { return }
         #endif
+        if RangeController.shared.isDuplicate {
+            InstanceLock.yieldToRunningInstance()
+            return
+        }
         RangeController.shared.start()
         registerActions()
         AppActions.shared.publish()

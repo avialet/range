@@ -106,11 +106,21 @@ final class RangeController {
     /// Apres une mise a jour, pas de rangement automatique avant une lecture reussie du dossier.
     @ObservationIgnored private var updateCheckPending = false
     @ObservationIgnored private var started = false
+    /// Une seule instance par base : sans verrou, cette copie s'efface devant l'autre.
+    @ObservationIgnored private(set) var lock: InstanceLock?
+    var isDuplicate: Bool { lock?.acquired == false }
     /// Captures : horloge avancee (stabilite acquise), reglages montres comme sur un vrai Mac.
     @ObservationIgnored private(set) var isCapturing = false
     @ObservationIgnored private var clockOffset: TimeInterval = 0
 
     private init() {
+        #if DEBUG
+        let capturing = SnapshotRequest.parse(prefix: Brand.name, arguments: CommandLine.arguments) != nil
+            && ProcessInfo.processInfo.environment["RANGE_DB_PATH"] == nil
+        lock = capturing ? nil : InstanceLock(next: AppDatabase.defaultURL)
+        #else
+        lock = InstanceLock(next: AppDatabase.defaultURL)
+        #endif
         do {
             #if DEBUG
             // Captures : jamais la vraie base ni les vrais reglages.
@@ -138,13 +148,13 @@ final class RangeController {
         initialDone = d.bool(forKey: Keys.initialDone)
         autoOffered = d.bool(forKey: Keys.autoOffered)
         let grace = d.object(forKey: Keys.grace) != nil ? max(0, d.integer(forKey: Keys.grace)) : 10
-        graceMinutes = grace
+        graceMinutes = max(1, grace)
         hotKeyEnabled = d.bool(forKey: Keys.hotKeyEnabled)
         let current = RangePaths.current()
         paths = current
         engine = RangeEngine(journal: journal, trasher: current.trasher,
                              settings: EngineSettings(folder: current.folder, home: current.home,
-                                                      grace: TimeInterval(grace * 60)))
+                                                      grace: TimeInterval(max(1, grace) * 60)))
         reloadJournal()
     }
 
@@ -427,7 +437,7 @@ final class RangeController {
 
     private func applySettings() {
         paths = RangePaths.current()
-        let settings = EngineSettings(folder: paths.folder, home: paths.home, grace: TimeInterval(graceMinutes * 60))
+        let settings = EngineSettings(folder: paths.folder, home: paths.home, grace: TimeInterval(max(1, graceMinutes) * 60))
         access = .unknown
         Task {
             await engine.update(settings: settings)

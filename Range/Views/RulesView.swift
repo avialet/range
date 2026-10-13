@@ -36,7 +36,7 @@ private struct RuleRow: View {
     let position: Int
 
     static let ages: [(Double, String)] = [
-        (0, "D\u{00E8}s l\u{2019}arriv\u{00E9}e"), (1, "Apr\u{00E8}s 1 jour"), (3, "Apr\u{00E8}s 3 jours"), (7, "Apr\u{00E8}s 7 jours"),
+        (0, "Apr\u{00E8}s le d\u{00E9}lai de gr\u{00E2}ce"), (1, "Apr\u{00E8}s 1 jour"), (3, "Apr\u{00E8}s 3 jours"), (7, "Apr\u{00E8}s 7 jours"),
         (14, "Apr\u{00E8}s 14 jours"), (30, "Apr\u{00E8}s 30 jours"), (90, "Apr\u{00E8}s 90 jours"),
     ]
 
