@@ -9,6 +9,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Mode capture : dossiers jetables, ni surveillance, ni raccourci, ni reseau.
         if runSnapshotIfRequested() { return }
         #endif
+        if let lock = RangeController.shared.lock, lock.openError != nil {
+            lock.reportOpenFailureAndQuit()
+            return
+        }
         if RangeController.shared.isDuplicate {
             InstanceLock.yieldToRunningInstance()
             return
