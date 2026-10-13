@@ -1,3 +1,4 @@
+import Carbon.HIToolbox
 import SwiftUI
 import VialetKit
 
@@ -11,8 +12,8 @@ enum Brand {
                                        deep: 0x210C00, pale: 0xFFEEE3,
                                        night: 0x2A1504, nightInk: 0xF7CEB1)
     /// Pictogramme de la plaque : sous-ensemble SVG absolu (M L H V C Q Z), boite 0-100, trait non rempli.
-    /// Vide = initiale en repli. Dessiner le trace, verifier avec `swift ../scripts/plaque.swift planche`, puis `make icon`.
-    static let glyph = ""
+    /// Commode a deux tiroirs (poignees au centre de chaque tiroir).
+    static let glyph = "M 18 16 H 82 V 86 H 18 Z M 18 51 H 82 M 40 33.5 H 60 M 40 68.5 H 60"
     /// Trait du glyphe en `deep` plutot qu'en blanc (accent trop clair pour un trait blanc).
     static let strokeDeep = false
     static let identity = AppIdentity(name: name, displayName: displayName, repository: "avialet/range",
@@ -29,8 +30,14 @@ extension Updater {
 }
 
 extension HotKeyController {
-    /// Choisir un raccourci libre : ⇧⌘Espace (Pico), ⌃⌥⌘Espace (Allege), ⌃⇧Espace (Pince) et ⌥⇧Espace (Brouillon)
-    /// sont deja pris. Mettre a jour la ligne « Raccourci global » du README.
+    /// Ouvre la fenetre de Range : ⌃⌥⌘R (libre dans le portefeuille), eteint par defaut
+    /// (cle `RangeHotKeyEnabled`). La touche R est au meme endroit en AZERTY et en QWERTY.
     static let shared = HotKeyController(defaultsKey: Brand.key("HotKey"), logName: Brand.displayName,
-                                         initial: .space([.control, .option, .shift]))
+                                         initial: HotKeyShortcut(keyCode: UInt16(kVK_ANSI_R),
+                                                                 modifiers: NSEvent.ModifierFlags([.control, .option, .command]).rawValue,
+                                                                 keyName: "R"))
+}
+
+extension MenuBarPresence {
+    static let shared = MenuBarPresence(app: Brand.identity)
 }
