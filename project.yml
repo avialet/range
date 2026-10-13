@@ -1,0 +1,64 @@
+name: Range
+options:
+  bundleIdPrefix: fr.vialet
+  deploymentTarget:
+    macOS: "26.0"
+  xcodeVersion: "26.0"
+  createIntermediateGroups: true
+# Version.xcconfig est ecrit par `make gen` depuis VERSION (MARKETING_VERSION).
+configFiles:
+  Debug: Version.xcconfig
+  Release: Version.xcconfig
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    SWIFT_STRICT_CONCURRENCY: complete
+    CODE_SIGN_IDENTITY: "-"
+    CODE_SIGN_STYLE: Manual
+    DEVELOPMENT_TEAM: ""
+    CURRENT_PROJECT_VERSION: "1"
+packages:
+  VialetKit:
+    url: https://github.com/avialet/vialetkit.git
+    # Mineur epingle (0.2.x) : en 0.x, un changement cassant du kit monte le mineur.
+    minorVersion: "0.2.0"
+  RangeCore:
+    path: Packages/RangeCore
+targets:
+  Range:
+    type: application
+    platform: macOS
+    sources:
+      - path: Range
+        excludes:
+          - "Resources/Info.plist"
+    dependencies:
+      - package: VialetKit
+      - package: RangeCore
+    info:
+      path: Range/Resources/Info.plist
+      properties:
+        CFBundleDisplayName: Range
+        CFBundleName: Range
+        LSMinimumSystemVersion: "26.0"
+        NSHumanReadableCopyright: "\u00A9 2026 Aur\u00E9lien Vialet" # YAML : \u00A9 = signe copyright
+        CFBundleURLTypes:
+          - CFBundleURLName: fr.vialet.range
+            CFBundleURLSchemes: [range]
+        LSApplicationCategoryType: public.app-category.productivity
+        CFBundleIconFile: AppIcon
+    entitlements:
+      path: Range/Resources/Range.entitlements
+      properties:
+        com.apple.security.app-sandbox: false
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: fr.vialet.range
+        ENABLE_HARDENED_RUNTIME: false
+schemes:
+  Range:
+    build:
+      targets:
+        Range: all
+    run:
+      config: Debug

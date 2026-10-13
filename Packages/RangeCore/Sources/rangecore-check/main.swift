@@ -1,0 +1,5 @@
+import RangeCore
+
+run([
+    databaseTests,
+])
