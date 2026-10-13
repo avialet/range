@@ -113,17 +113,26 @@ public actor RangeEngine {
         Undoer(journal: journal).undoBatch(id, now: now)
     }
 
-    /// Defait le dernier lot encore defaisable ; nil s'il n'y en a pas.
-    public func undoLast(now: Date) -> UndoResult? {
-        guard let last = try? journal.lastUndoableBatch(), let id = last.batch.id else { return nil }
-        return undoBatch(id, now: now)
+    /// Defait le dernier lot ou au moins un fichier peut encore etre remis ; nil s'il n'y en a pas.
+    public func undoLast(now: Date) throws -> UndoResult? {
+        let undoer = Undoer(journal: journal)
+        for summary in try journal.batches(limit: 50) where summary.batch.undoneAt == nil {
+            guard let id = summary.batch.id, summary.moves.contains(where: { undoer.state(of: $0) == .undoable }) else { continue }
+            return undoBatch(id, now: now)
+        }
+        return nil
     }
 
     public func undo(moveId: Int64, now: Date) throws -> String {
         guard let move = try journal.database.read({ db in try MoveRecord.fetchOne(db, key: moveId) }) else {
             throw UndoError.gone
         }
-        return try Undoer(journal: journal).undo(move, now: now)
+        do {
+            return try Undoer(journal: journal).undo(move, now: now)
+        } catch let error as UndoError {
+            try journal.setUndoError(moveId: moveId, error.code)
+            throw error
+        }
     }
 
     /// Le fichier garde en place apres une annulation peut de nouveau etre range.

@@ -1,5 +1,6 @@
 import Darwin
 import Foundation
+import GRDB
 import RangeCore
 
 /// Arborescence lisible : chemin relatif -> contenu (dossiers suivis d'un /).
@@ -78,6 +79,37 @@ let undoTests: (String, [Test]) = ("Undo", [
             expect(batch?.batch.undoneAt != nil)
             expect(batch?.moves.allSatisfy { $0.undoneAt != nil } == true)
             expectEqual(try bench.journal.lastUndoableBatch()?.batch.id, nil)
+        }
+    },
+    Test("partialUndoKeepsBatchOpenWithReasons") {
+        try withTemporaryDirectory { dir in
+            let bench = try Bench(dir)
+            try makeFile(bench.downloads, "a.jpg", "a")
+            try makeFile(bench.downloads, "b.jpg", "b")
+            let result = bench.executor.apply(try bench.plan().ready, trigger: .manual, now: Date())
+            guard let id = result.batchId, let gone = result.moves.first(where: { $0.name == "b.jpg" }) else {
+                return expect(false, "rien")
+            }
+            try FileManager.default.removeItem(atPath: gone.destination)
+            let undo = bench.undoer.undoBatch(id, now: Date())
+            expectEqual(undo.restored.count, 1)
+            expectEqual(undo.failures.first?.error, .gone)
+            let batch = try bench.journal.batch(id)
+            expect(batch?.batch.undoneAt == nil, "lot pas entierement annule")
+            expectEqual(batch?.progress, .partial)
+            expectEqual(batch?.moves.first { $0.name == "b.jpg" }?.undoError, UndoError.gone.code)
+        }
+    },
+    Test("journalErrorAfterRestoreDoesNotThrow") {
+        try withTemporaryDirectory { dir in
+            let bench = try Bench(dir)
+            let photo = try makeFile(bench.downloads, "photo.jpg")
+            let result = bench.executor.apply(try bench.plan().ready, trigger: .manual, now: Date())
+            guard let move = result.moves.first else { return expect(false, "rien") }
+            try bench.journal.database.write { db in try db.execute(sql: "DROP TABLE move") }
+            let restored = try bench.undoer.undo(move, now: Date())
+            expectEqual(restored, photo.path)
+            expect(FileManager.default.fileExists(atPath: photo.path), "remis malgre le journal")
         }
     },
     Test("undoneFilesAreHeld") {

@@ -70,7 +70,10 @@ private struct BatchCard: View {
                             .font(Theme.ui(11.5)).foregroundStyle(Theme.inkSoft)
                     }
                     Spacer(minLength: 8)
-                    if summary.batch.undoneAt != nil && !undoable {
+                    if summary.progress == .partial {
+                        Chip("Annul\u{00E9} en partie", icon: "exclamationmark.circle", color: Theme.coral)
+                    }
+                    if summary.progress == .full && !undoable {
                         Chip("Annul\u{00E9}", icon: "arrow.uturn.backward", color: Theme.inkSoft)
                     } else if undoable {
                         PillButton(title: "Annuler ce lot", icon: "arrow.uturn.backward") {
@@ -161,11 +164,19 @@ private struct MoveRow: View {
     }
 
     private var stateLabel: String {
+        if state != .undone, let code = move.undoError {
+            switch code {
+            case UndoError.sourceFolderMissing.code: return "Dossier d\u{2019}origine absent"
+            case UndoError.denied.code: return "Acc\u{00E8}s refus\u{00E9}"
+            case UndoError.changed.code: return "Remplac\u{00E9} depuis"
+            default: break
+            }
+        }
         switch state {
-        case .undoable: ""
-        case .undone: "Remis en place"
-        case .gone: move.kind == .trash ? "Corbeille vid\u{00E9}e" : "D\u{00E9}plac\u{00E9} depuis"
-        case .changed: "Remplac\u{00E9} depuis"
+        case .undoable: return ""
+        case .undone: return "Remis en place"
+        case .gone: return move.kind == .trash ? "Corbeille vid\u{00E9}e" : "D\u{00E9}plac\u{00E9} depuis"
+        case .changed: return "Remplac\u{00E9} depuis"
         }
     }
 }

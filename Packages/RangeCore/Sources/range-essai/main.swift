@@ -40,7 +40,7 @@ let engine = RangeEngine(journal: journal, trasher: FolderTrasher(folder: trash)
 func run() async throws {
     if command == "annuler-tout" {
         var restored = 0, failed = 0
-        while let result = await engine.undoLast(now: Date()) {
+        while let result = try await engine.undoLast(now: Date()) {
             restored += result.restored.count
             failed += result.failures.count
             for f in result.failures { print("  echec : \(f.name) \(f.error)") }

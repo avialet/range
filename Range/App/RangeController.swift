@@ -327,11 +327,16 @@ final class RangeController {
 
     // MARK: Annuler
 
-    var canUndoLast: Bool { batches.contains { $0.batch.undoneAt == nil && $0.moves.contains { $0.undoneAt == nil } } }
+    var canUndoLast: Bool {
+        batches.contains { $0.batch.undoneAt == nil && $0.moves.contains { undoStates[$0.id ?? 0] == .undoable } }
+    }
 
     func undoLast() {
         Task {
-            guard let result = await engine.undoLast(now: Date()) else { return }
+            guard let result = try? await engine.undoLast(now: Date()) else {
+                showToast(Toast(text: "Rien \u{00E0} remettre en place", undoBatch: nil))
+                return
+            }
             finishUndo(result)
         }
     }
@@ -359,7 +364,9 @@ final class RangeController {
         reloadJournal()
         let n = result.restored.count
         var text = n == 0 ? "Rien \u{00E0} remettre en place" : "\(n) fichier\(n > 1 ? "s" : "") remis en place"
-        if !result.failures.isEmpty { text += " \u{00B7} \(result.failures.count) introuvable\(result.failures.count > 1 ? "s" : "")" }
+        if !result.failures.isEmpty {
+            text += " \u{00B7} \(result.failures.count) non remis (voir le Journal)"
+        }
         showToast(Toast(text: text, undoBatch: nil))
         scan()
     }

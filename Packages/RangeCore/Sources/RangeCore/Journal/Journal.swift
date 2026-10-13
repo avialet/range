@@ -82,10 +82,20 @@ public struct MoveRecord: Codable, Sendable, Equatable, Identifiable, FetchableR
     public var name: String { (source as NSString).lastPathComponent }
 }
 
+public enum UndoProgress: Sendable, Equatable {
+    case none, partial, full
+}
+
 public struct BatchSummary: Sendable, Equatable, Identifiable {
     public var batch: BatchRecord
     public var moves: [MoveRecord]
     public var id: Int64 { batch.id ?? 0 }
+
+    /// Annule entierement (tous les fichiers remis), en partie, ou pas du tout.
+    public var progress: UndoProgress {
+        if batch.undoneAt != nil { return .full }
+        return moves.contains { $0.undoneAt != nil || $0.undoError != nil } ? .partial : .none
+    }
 }
 
 /// Journal d'annulation et reglages du coeur, dans la base de l'app.

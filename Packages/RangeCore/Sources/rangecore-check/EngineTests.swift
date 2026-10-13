@@ -49,7 +49,7 @@ let engineTests: (String, [Test]) = ("Engine", [
             expectEqual(result.moves.count, 1, "la ligne decochee reste")
             expectEqual(plan.ready.count, 2)
             expect(!FileManager.default.fileExists(atPath: photo.path))
-            let undo = try blocking { await e.undoLast(now: Date()) }
+            let undo = try blocking { try await e.undoLast(now: Date()) }
             expectEqual(undo?.restored.count, 1)
             expect(FileManager.default.fileExists(atPath: photo.path))
             let after = try blocking { try await e.scan(now: t0.addingTimeInterval(40)) }

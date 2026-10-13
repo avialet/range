@@ -13,6 +13,18 @@ public enum UndoState: Equatable, Sendable {
 public enum UndoError: Error, Equatable, Sendable {
     case alreadyUndone, gone, changed, sourceFolderMissing, denied
     case failed(String)
+
+    /// Raison gardee au journal (`undoError`).
+    public var code: String {
+        switch self {
+        case .alreadyUndone: "alreadyUndone"
+        case .gone: "gone"
+        case .changed: "changed"
+        case .sourceFolderMissing: "sourceFolderMissing"
+        case .denied: "denied"
+        case .failed(let message): "failed:" + message
+        }
+    }
 }
 
 public struct UndoFailure: Sendable, Equatable {
@@ -24,6 +36,8 @@ public struct UndoFailure: Sendable, Equatable {
 public struct UndoResult: Sendable, Equatable {
     public var restored: [String]
     public var failures: [UndoFailure]
+    /// Fichiers remis en place mais dont le journal n'a pas pu etre mis a jour.
+    public var journalErrors = 0
 }
 
 /// Remet un fichier range a sa place d'origine, apres verification que c'est bien lui.
@@ -43,8 +57,14 @@ public struct Undoer: Sendable {
         return .undoable
     }
 
-    /// Renvoie l'emplacement retrouve (le nom d'origine, ou « nom 2.ext » s'il est repris).
+    /// Renvoie l'emplacement retrouve (le nom d'origine, ou "nom 2.ext" s'il est repris). Une fois le
+    /// fichier remis, une erreur du journal ne fait pas echouer l'annulation (`journalError`).
     public func undo(_ move: MoveRecord, now: Date) throws -> String {
+        var journalError = false
+        return try undo(move, now: now, journalError: &journalError)
+    }
+
+    func undo(_ move: MoveRecord, now: Date, journalError: inout Bool) throws -> String {
         switch state(of: move) {
         case .undone: throw UndoError.alreadyUndone
         case .gone: throw UndoError.gone
@@ -53,7 +73,7 @@ public struct Undoer: Sendable {
         }
         let folder = FilePath.parent(move.source)
         guard FileOps.isDirectory(folder) else { throw UndoError.sourceFolderMissing }
-        // Le nom d'origine, octet pour octet ; s'il est repris, « nom 2.ext ».
+        // Le nom d'origine, octet pour octet ; s'il est repris, "nom 2.ext".
         var target = move.source
         var n = 2
         while FileOps.exists(target) {
@@ -66,25 +86,52 @@ public struct Undoer: Sendable {
             if case .denied = FolderAccessError.from(error) { throw UndoError.denied }
             throw UndoError.failed((error as NSError).localizedDescription)
         }
+        // Ce qui est arrive doit etre le fichier note : sinon il repart d'ou il vient.
+        if Recovery.inode(target) != move.inode {
+            try? FileOps.renameExclusive(target, move.destination)
+            throw UndoError.changed
+        }
         Executor.removeEmpty(move.createdDirs)
-        if let id = move.id { try journal.markUndone(moveId: id, at: now, restoredTo: target) }
-        try journal.hold(inode: UInt64(bitPattern: move.inode), path: target, date: now)
+        do {
+            if let id = move.id { try journal.markUndone(moveId: id, at: now, restoredTo: target) }
+            try journal.hold(inode: UInt64(bitPattern: move.inode), path: target, date: now)
+        } catch {
+            journalError = true
+        }
         return target
     }
 
-    /// Defait tout un lot, du dernier fichier au premier.
+    /// Defait tout un lot, du dernier fichier au premier. Le lot n'est marque annule que si tout est remis ;
+    /// sinon chaque fichier garde la raison de son echec.
     public func undoBatch(_ id: Int64, now: Date) -> UndoResult {
         var result = UndoResult(restored: [], failures: [])
-        guard let summary = try? journal.batch(id) else { return result }
+        let summary: BatchSummary
+        do {
+            guard let found = try journal.batch(id) else { return result }
+            summary = found
+        } catch {
+            result.journalErrors += 1
+            return result
+        }
         for move in summary.moves.reversed() where move.undoneAt == nil {
+            var journalError = false
             do {
-                result.restored.append(try undo(move, now: now))
+                result.restored.append(try undo(move, now: now, journalError: &journalError))
+                if journalError { result.journalErrors += 1 }
+                if let moveId = move.id, move.undoError != nil {
+                    do { try journal.setUndoError(moveId: moveId, nil) } catch { result.journalErrors += 1 }
+                }
             } catch {
-                result.failures.append(UndoFailure(moveId: move.id ?? 0, name: move.name,
-                                                   error: error as? UndoError ?? .failed("\(error)")))
+                let reason = error as? UndoError ?? .failed("\(error)")
+                result.failures.append(UndoFailure(moveId: move.id ?? 0, name: move.name, error: reason))
+                if let moveId = move.id {
+                    do { try journal.setUndoError(moveId: moveId, reason.code) } catch { result.journalErrors += 1 }
+                }
             }
         }
-        try? journal.markBatchUndone(id, at: now)
+        if result.failures.isEmpty {
+            do { try journal.markBatchUndone(id, at: now) } catch { result.journalErrors += 1 }
+        }
         return result
     }
 }
