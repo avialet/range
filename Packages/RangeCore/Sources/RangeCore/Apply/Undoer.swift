@@ -86,11 +86,7 @@ public struct Undoer: Sendable {
             if case .denied = FolderAccessError.from(error) { throw UndoError.denied }
             throw UndoError.failed((error as NSError).localizedDescription)
         }
-        // Ce qui est arrive doit etre le fichier note : sinon il repart d'ou il vient.
-        if Recovery.inode(target) != move.inode {
-            try? FileOps.renameExclusive(target, move.destination)
-            throw UndoError.changed
-        }
+        try Self.verifyRestored(target, move: move)
         Executor.removeEmpty(move.createdDirs)
         do {
             if let id = move.id { try journal.markUndone(moveId: id, at: now, restoredTo: target) }
@@ -99,6 +95,18 @@ public struct Undoer: Sendable {
             journalError = true
         }
         return target
+    }
+
+    /// Ce qui est arrive a `target` doit etre le fichier note ; sinon il repart d'ou il vient
+    /// (`.changed`). Si ce retour echoue aussi, l'erreur le dit avec les chemins (`.failed`).
+    public static func verifyRestored(_ target: String, move: MoveRecord) throws {
+        guard Recovery.inode(target) != move.inode else { return }
+        do {
+            try FileOps.renameExclusive(target, move.destination)
+        } catch {
+            throw UndoError.failed("fichier inattendu laisse en \(target) (retour vers \(move.destination) impossible : \((error as NSError).localizedDescription))")
+        }
+        throw UndoError.changed
     }
 
     /// Defait tout un lot, du dernier fichier au premier. Le lot n'est marque annule que si tout est remis ;

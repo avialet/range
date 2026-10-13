@@ -113,6 +113,33 @@ let undoTests: (String, [Test]) = ("Undo", [
             expect(FileManager.default.fileExists(atPath: photo.path), "remis malgre le journal")
         }
     },
+    Test("wrongFileAfterRestoreGoesBackOrSaysWhy") {
+        try withTemporaryDirectory { dir in
+            let bench = try Bench(dir)
+            let photo = try makeFile(bench.downloads, "photo.jpg")
+            let result = bench.executor.apply(try bench.plan().ready, trigger: .manual, now: Date())
+            guard var move = result.moves.first else { return expect(false, "rien") }
+            move.inode += 1 // ce qui arrive n'est pas le fichier note
+            try FileOps.renameExclusive(move.destination, photo.path)
+            do {
+                try Undoer.verifyRestored(photo.path, move: move)
+                expect(false, "aurait du echouer")
+            } catch let error as UndoError {
+                expectEqual(error, .changed)
+                expect(FileOps.exists(move.destination), "reparti d'ou il vient")
+            }
+            // Retour impossible (la place est reprise) : l'echec dit pourquoi.
+            try FileOps.renameExclusive(move.destination, photo.path)
+            try makeFile(URL(fileURLWithPath: FilePath.parent(move.destination)), FilePath.name(move.destination), "autre")
+            do {
+                try Undoer.verifyRestored(photo.path, move: move)
+                expect(false, "aurait du echouer")
+            } catch let error as UndoError {
+                guard case .failed(let detail) = error else { return expect(false, "attendu .failed, recu \(error)") }
+                expect(detail.contains(photo.path), "detail avec le chemin : \(detail)")
+            }
+        }
+    },
     Test("undoneFilesAreHeld") {
         try withTemporaryDirectory { dir in
             let bench = try Bench(dir)
