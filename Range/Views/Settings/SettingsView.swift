@@ -12,9 +12,10 @@ struct SettingsView: View {
     var body: some View {
         @Bindable var controller = controller
         SettingsScreen(app: Brand.identity, hotKey: .shared, updater: .shared, menuBar: MenuBarPresence.shared,
-                       hotKeyEnabled: $controller.hotKeyEnabled,
+                       dock: DockPresence.shared, hotKeyEnabled: $controller.hotKeyEnabled,
                        hotKeyHint: "Depuis n\u{2019}importe quelle app : ouvre ou masque la fen\u{00EA}tre de Range.",
                        alwaysOnHint: "Fermer la fen\u{00EA}tre ne quitte pas Range : il continue de surveiller \(controller.paths.folderDisplayName). \u{2318}Q pour quitter.",
+                       updateNote: HubPresence.updateNote,
                        width: 480) {
             // Cartes propres a Range.
             SettingsCard(icon: "tray.and.arrow.down", color: Theme.accent, title: "Rangement") {

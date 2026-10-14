@@ -19,7 +19,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         RangeController.shared.start()
         registerActions()
-        AppActions.shared.publish()
+        _ = DockPresence.shared
+        HubPresence.start(menuBar: MenuBarPresence.shared, actions: AppActions.shared, updater: Updater.shared)
         // Laisse l'app s'afficher avant le moindre appel reseau.
         DispatchQueue.main.asyncAfter(deadline: .now() + 6) {
             MainActor.assumeIsolated { Updater.shared.checkAutomatically() }
